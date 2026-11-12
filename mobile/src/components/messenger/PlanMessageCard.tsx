@@ -8,6 +8,7 @@ import { fb, muse, museGradient } from "@/constants/theme";
 export type PlanCardPayload = {
   type: "plan";
   plan_id: string;
+  event_id?: string;
   title: string;
   when: string;
   where: string;
@@ -28,6 +29,12 @@ export function PlanMessageCard({ card }: { card: PlanCardPayload }) {
           <Text style={styles.title}>{card.title}</Text>
           <Text style={styles.meta}>{card.when} · {card.where}</Text>
           <Text style={styles.line}>{card.line}</Text>
+          {card.event_id && (
+            <Pressable onPress={() => router.push({ pathname: "/events/[id]", params: { id: card.event_id as string } })} style={styles.eventBtn} accessibilityRole="button">
+              <Ionicons name="calendar-outline" size={15} color={fb.text} />
+              <Text style={styles.eventText}>View event</Text>
+            </Pressable>
+          )}
         </View>
       </View>
     </Pressable>
@@ -43,4 +50,6 @@ const styles = StyleSheet.create({
   title: { fontSize: 16, fontWeight: "700", color: fb.text },
   meta: { fontSize: 13, color: fb.muted },
   line: { fontSize: 14, color: fb.text, marginTop: 4 },
+  eventBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, height: 34, borderRadius: 8, backgroundColor: fb.input, marginTop: 8 },
+  eventText: { fontSize: 14, fontWeight: "600", color: fb.text },
 });

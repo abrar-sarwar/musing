@@ -1,16 +1,24 @@
 import { useState } from "react";
 import { FlatList, StyleSheet, Text, View } from "react-native";
+import { OverlapCard } from "@/components/reels/OverlapCard";
 import { captionFor, ReelCard, type Reel } from "@/components/reels/ReelCard";
 import { Screen } from "@/components/shell/Screen";
 import { fb } from "@/constants/theme";
+import { useActingUser } from "@/lib/acting-user";
+import { apiGet } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
 import { useQuery } from "@/lib/use-query";
-import type { User } from "@/shared/types";
+import type { Overlap, User } from "@/shared/types";
 
 type Row = { user_id: string; topic: string; score: number; user: User };
 
 export default function ReelsScreen() {
+  const { userId } = useActingUser();
   const [height, setHeight] = useState(0);
+  const [seen, setSeen] = useState(0); // furthest reel reached
+  const [dismissed, setDismissed] = useState(false);
+  // the count comes from sql on the server. it is null below 3 opted-in friends.
+  const overlap = useQuery(() => apiGet<{ overlap: Overlap }>("/api/overlap", userId).then((r) => r.overlap), [userId]);
   const reels = useQuery(async () => {
     const { data, error } = await supabase
       .from("reels_topics")
@@ -33,10 +41,13 @@ export default function ReelsScreen() {
             snapToInterval={height}
             decelerationRate="fast"
             showsVerticalScrollIndicator={false}
+            onMomentumScrollEnd={(e) => setSeen((n) => Math.max(n, Math.round(e.nativeEvent.contentOffset.y / height)))}
             getItemLayout={(_, i) => ({ length: height, offset: height * i, index: i })}
             ListEmptyComponent={<Text style={styles.empty}>{reels.error ?? (reels.loading ? "Loading…" : "No reels yet.")}</Text>}
           />
         )}
+        {/* slides in once they've scrolled a couple of reels */}
+        {overlap.data && seen >= 2 && !dismissed && <OverlapCard overlap={overlap.data} onDismiss={() => setDismissed(true)} />}
       </View>
     </Screen>
   );

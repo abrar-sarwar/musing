@@ -6,6 +6,7 @@ import { fb } from "@/constants/theme";
 import { useActingUser } from "@/lib/acting-user";
 import { supabase } from "@/lib/supabase";
 import { useQuery } from "@/lib/use-query";
+import { useTableChanges } from "@/lib/use-realtime";
 import { timeAgo } from "@/shared/time";
 import type { Message, Thread, User } from "@/shared/types";
 
@@ -32,6 +33,8 @@ export default function MessagesScreen() {
       .map<Row>((t) => ({ ...t, last: msgs.find((m) => m.thread_id === t.id) ?? null }))
       .sort((a, b) => (b.last?.created_at ?? "").localeCompare(a.last?.created_at ?? ""));
   }, [userId]);
+
+  useTableChanges("messages", () => void threads.reload());
 
   return (
     <SubScreen title="Chats">

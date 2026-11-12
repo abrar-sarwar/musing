@@ -8,7 +8,9 @@ import { SubScreen } from "@/components/shell/SubScreen";
 import { Avatar } from "@/components/ui/Avatar";
 import { Card } from "@/components/ui/Card";
 import { fb, museGradient } from "@/constants/theme";
+import { absoluteUrl } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
+import { useTableChanges } from "@/lib/use-realtime";
 import { useQuery } from "@/lib/use-query";
 
 export default function EventDetail() {
@@ -19,16 +21,19 @@ export default function EventDetail() {
     return data as unknown as EventRow | null;
   }, [id]);
   const ev = q.data;
+  // the poster lands about a minute after the plan becomes real
+  useTableChanges("events", () => void q.reload(), `id=eq.${id}`);
 
   return (
     <SubScreen title="Event">
       {ev ? (
         <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
           {ev.poster_url ? (
-            <Image source={{ uri: ev.poster_url }} style={styles.poster} contentFit="cover" />
+            <Image source={{ uri: absoluteUrl(ev.poster_url) }} style={styles.posterSquare} contentFit="cover" transition={300} />
           ) : (
             <LinearGradient colors={[...museGradient]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.poster, styles.center]}>
-              <Ionicons name="calendar" size={48} color="rgba(255,255,255,0.9)" />
+              <Ionicons name={ev.plan_id ? "sparkles" : "calendar"} size={48} color="rgba(255,255,255,0.9)" />
+              {ev.plan_id && <Text style={styles.posterNote}>made with musing.</Text>}
             </LinearGradient>
           )}
           <Card style={styles.block}>
@@ -73,6 +78,8 @@ export default function EventDetail() {
 
 const styles = StyleSheet.create({
   poster: { width: "100%", aspectRatio: 16 / 9 },
+  posterSquare: { width: "100%", aspectRatio: 1 },
+  posterNote: { color: "rgba(255,255,255,0.9)", fontSize: 13, fontWeight: "600", marginTop: 6 },
   center: { alignItems: "center", justifyContent: "center" },
   block: { padding: 16, gap: 8 },
   when: { color: fb.red, fontWeight: "700", fontSize: 13, textTransform: "uppercase" },

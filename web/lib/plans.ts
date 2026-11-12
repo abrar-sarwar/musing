@@ -91,7 +91,8 @@ async function buildView(b: Bundle, viewerId: string): Promise<PlanView | null> 
     // names appear only once it's real, and only the people who are in.
     going: happening ? [starter, ...down.map((m) => users.get(m.user_id)).filter((u): u is User => Boolean(u))].map(person) : null,
     me: mine ? { personalAsk: mine.personal_ask, status: mine.status, counteroffer: mine.counteroffer, privateLimit } : null,
-    threadId: happening ? plan.thread_id : null,
+    // the chat is for people who are in. the event page is fine for anyone who was asked.
+    threadId: happening && (isStarter || mine?.status === "down") ? plan.thread_id : null,
     eventId: happening ? plan.event_id : null,
     updatedAt: plan.updated_at,
   };

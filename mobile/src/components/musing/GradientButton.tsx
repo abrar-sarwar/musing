@@ -31,6 +31,6 @@ const styles = StyleSheet.create({
   btn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, borderRadius: 999, paddingHorizontal: 16, height: 40 },
   big: { height: 50 },
   text: { color: "#fff", fontWeight: "700", fontSize: 15 },
-  quiet: { height: 40, borderRadius: 999, paddingHorizontal: 16, alignItems: "center", justifyContent: "center", backgroundColor: fb.input },
+  quiet: { height: 40, borderRadius: 999, paddingHorizontal: 16, alignItems: "center", justifyContent: "center", backgroundColor: "#e4e6eb" },
   quietText: { color: fb.text, fontWeight: "600", fontSize: 15 },
 });

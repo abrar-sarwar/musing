@@ -4,6 +4,7 @@ import { Screen } from "@/components/shell/Screen";
 import { fb } from "@/constants/theme";
 import { supabase } from "@/lib/supabase";
 import { useQuery } from "@/lib/use-query";
+import { useTableChanges } from "@/lib/use-realtime";
 
 export default function EventsScreen() {
   const events = useQuery(async () => {
@@ -11,6 +12,7 @@ export default function EventsScreen() {
     if (error) throw new Error(error.message);
     return data as unknown as EventRow[];
   });
+  useTableChanges("events", () => void events.reload());
   return (
     <Screen>
       <FlatList

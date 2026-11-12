@@ -1,13 +1,26 @@
-import { Stack } from "expo-router";
+import { Stack, useGlobalSearchParams } from "expo-router";
+import { useEffect } from "react";
 import { StatusBar } from "expo-status-bar";
 import { UserSwitcherSheet } from "@/components/shell/UserSwitcherSheet";
-import { ActingUserProvider } from "@/lib/acting-user";
+import { ActingUserProvider, useActingUser } from "@/lib/acting-user";
 import { PrefsProvider } from "@/lib/prefs";
+
+// demo affordance: any link with ?as=<userId> switches the acting user first,
+// so a qr code or deep link can open a second phone straight into a friend's view.
+function ActAsFromLink() {
+  const { as } = useGlobalSearchParams<{ as?: string }>();
+  const { userId, users, switchTo } = useActingUser();
+  useEffect(() => {
+    if (as && as !== userId && users.some((u) => u.id === as)) switchTo(as);
+  }, [as, userId, users, switchTo]);
+  return null;
+}
 
 export default function RootLayout() {
   return (
     <ActingUserProvider>
       <PrefsProvider>
+        <ActAsFromLink />
         <StatusBar style="dark" />
         <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: "#fff" } }} />
         <UserSwitcherSheet />
