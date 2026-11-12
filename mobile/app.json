@@ -8,7 +8,17 @@
     "scheme": "musing",
     "userInterfaceStyle": "light",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/expo.icon",
+      "bundleIdentifier": "com.oninactive.musing",
+      "appleTeamId": "FZ44V8RNMH",
+      "infoPlist": {
+        "NSLocalNetworkUsageDescription": "musing. talks to the prototype server running on your laptop.",
+        "NSAppTransportSecurity": {
+          "NSAllowsLocalNetworking": true,
+          "NSAllowsArbitraryLoads": true
+        },
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
