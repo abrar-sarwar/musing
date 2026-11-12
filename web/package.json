@@ -1,0 +1,35 @@
+{
+  "name": "musing",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "seed": "node --env-file=.env.local --import tsx scripts/seed.ts",
+    "db:reset": "cd .. && supabase db reset && cd web && pnpm seed",
+    "typecheck": "tsc --noEmit",
+    "sync:shared": "cp lib/types.ts lib/copy.ts lib/hash.ts lib/time.ts ../mobile/src/shared/"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.119.0",
+    "next": "16.4.6",
+    "openai": "^7.55.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@tailwindcss/turbopack": "4.3.3",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.4.6",
+    "tailwindcss": "4.3.3",
+    "tsx": "^4.23.15",
+    "typescript": "^5"
+  },
+  "packageManager": "pnpm@10.33.2"
+}
