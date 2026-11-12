@@ -84,7 +84,7 @@ struct FadePress: ButtonStyle {
     }
 }
 
-// the musing. primary action. gradient pill.
+// the musing. primary action. a pill that runs facebook blue to musing purple.
 struct GradientButton: View {
     let label: String
     var icon: String?
@@ -105,7 +105,7 @@ struct GradientButton: View {
             .padding(.horizontal, 16)
             .frame(maxWidth: big || fill ? .infinity : nil)
             .frame(height: big ? 50 : 40)
-            .background(Muse.gradient, in: Capsule())
+            .background(Muse.entryGradient, in: Capsule())
             .opacity(off ? 0.45 : 1)
         }
         .buttonStyle(FadePress())
