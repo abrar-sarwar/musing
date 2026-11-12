@@ -1,6 +1,7 @@
 import { Stack, useGlobalSearchParams } from "expo-router";
 import { useEffect } from "react";
 import { StatusBar } from "expo-status-bar";
+import { LaunchIntro } from "@/components/musing/LaunchIntro";
 import { UserSwitcherSheet } from "@/components/shell/UserSwitcherSheet";
 import { ActingUserProvider, useActingUser } from "@/lib/acting-user";
 import { PrefsProvider } from "@/lib/prefs";
@@ -28,6 +29,7 @@ export default function RootLayout() {
             <StatusBar style="auto" />
             <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: "#fff" } }} />
             <UserSwitcherSheet />
+            <LaunchIntro />
           </ToastProvider>
         </SafeAreaProvider>
       </PrefsProvider>

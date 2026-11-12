@@ -1,4 +1,4 @@
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { KeyboardAvoidingView, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { PlanRow } from "@/components/musing/PlanRow";
 import { SignalComposer } from "@/components/musing/SignalComposer";
@@ -21,6 +21,7 @@ export default function MusingScreen() {
   const { userId } = useActingUser();
   const { settings, setHandoff } = usePrefs();
   const router = useRouter();
+  const { compose } = useLocalSearchParams<{ compose?: string }>();
 
   const home = useQuery(() => apiGet<MusingHome>("/api/musing/home", userId), [userId]);
   // any plan change anywhere: refetch. the server decides what this person may see.
@@ -38,6 +39,9 @@ export default function MusingScreen() {
             <Text style={styles.tagline}>one vague thought. a real plan with friends. nobody has to ask.</Text>
           </View>
 
+          <SignalComposer autoFocus={compose === "1"} onPlan={(planId) => router.push({ pathname: "/musing/[planId]", params: { planId } })} />
+          {settings.muse_on && <SuggestCard />}
+
           {asks.length > 0 && (
             <>
               <Text style={styles.section}>for you</Text>
@@ -46,12 +50,9 @@ export default function MusingScreen() {
                   <PlanRow key={p.id} plan={p} />
                 ))}
               </Card>
-              <View style={{ height: 12 }} />
             </>
           )}
 
-          <SignalComposer onPlan={(planId) => router.push({ pathname: "/musing/[planId]", params: { planId } })} />
-          {settings.muse_on && <SuggestCard />}
 
           {mine.length > 0 && (
             <>

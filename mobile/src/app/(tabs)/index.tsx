@@ -7,7 +7,8 @@ import { FbHeader } from "@/components/facebook/FbHeader";
 import { FbScreen } from "@/components/facebook/FbScreen";
 import { FeedPost, type FeedItem } from "@/components/facebook/FeedPost";
 import { StoryCard } from "@/components/facebook/StoryCard";
-import { MoveChip, MusingFeedUnit } from "@/components/musing/MusingEntry";
+import { MusingFeedUnit } from "@/components/musing/MusingEntry";
+import { MusingHomeCard } from "@/components/musing/MusingHomeCard";
 import { Avatar } from "@/components/ui/Avatar";
 import { fb, TAB_BAR_SPACE } from "@/constants/theme";
 import { useActingUser } from "@/lib/acting-user";
@@ -74,11 +75,10 @@ export default function HomeScreen() {
           <MaterialCommunityIcons name="image" size={26} color={fb.muted} />
         </Pressable>
       </View>
-      <View style={styles.moveRow}>
-        <MoveChip />
-      </View>
+      <MusingHomeCard />
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.stories}>
         {me && <StoryCard user={me} media={STORY_MEDIA[me.id] ?? COVER.hills} label="Your story" seen onPress={() => setStory({ user: me, media: STORY_MEDIA[me.id] ?? COVER.hills })} />}
+        {users.length === 0 && [0, 1, 2, 3].map((i) => <View key={i} style={styles.storyGhost} />)}
         {storyUsers.map((u) => (
           <StoryCard key={u.id} user={u} media={STORY_MEDIA[u.id]} label={u.name} onPress={() => setStory({ user: u, media: STORY_MEDIA[u.id] })} />
         ))}
@@ -96,7 +96,7 @@ export default function HomeScreen() {
         renderItem={({ item }) => (item.kind === "post" ? <FeedPost post={item.post} onHide={() => setHidden((h) => [...h, item.post.id])} /> : <MusingFeedUnit />)}
         ListHeaderComponent={header}
         ItemSeparatorComponent={Band}
-        ListEmptyComponent={<Text style={styles.empty}>{posts.error ? `Couldn't load the feed: ${posts.error}` : "Loading…"}</Text>}
+        ListEmptyComponent={posts.error ? <Text style={styles.empty}>Couldn&apos;t load the feed: {posts.error}</Text> : <FeedSkeleton />}
         refreshing={false}
         onRefresh={posts.reload}
         contentContainerStyle={{ paddingBottom: TAB_BAR_SPACE }}
@@ -153,11 +153,36 @@ export default function HomeScreen() {
 
 const Band = () => <View style={styles.band} />;
 
+// facebook-style placeholder posts while the feed loads. home is usable right away.
+function FeedSkeleton() {
+  return (
+    <View>
+      {[0, 1].map((i) => (
+        <View key={i} style={styles.skel}>
+          <View style={styles.skelHead}>
+            <View style={styles.ghost} />
+            <View style={{ gap: 6 }}>
+              <View style={[styles.skelLine, { width: 140 }]} />
+              <View style={[styles.skelLine, { width: 80 }]} />
+            </View>
+          </View>
+          <View style={[styles.skelLine, { width: "80%", marginTop: 12 }]} />
+          <View style={styles.skelMedia} />
+        </View>
+      ))}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  composer: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 14, paddingTop: 4, paddingBottom: 8 },
+  composer: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 14, paddingTop: 4, paddingBottom: 10 },
   ghost: { width: 42, height: 42, borderRadius: 21, backgroundColor: fb.input },
   mind: { fontSize: 17, color: fb.text },
-  moveRow: { paddingLeft: 68, paddingBottom: 10 },
+  storyGhost: { width: 118, height: 200, borderRadius: 14, backgroundColor: fb.input },
+  skel: { paddingTop: 12, borderBottomWidth: 5, borderBottomColor: "#c9ccd1" },
+  skelHead: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 14 },
+  skelLine: { height: 10, borderRadius: 5, backgroundColor: fb.input, marginHorizontal: 14 },
+  skelMedia: { height: 220, backgroundColor: fb.input, marginTop: 12 },
   stories: { paddingHorizontal: 10, gap: 6, paddingBottom: 12 },
   band: { height: 5, backgroundColor: "#c9ccd1" },
   empty: { color: fb.muted, textAlign: "center", padding: 24 },

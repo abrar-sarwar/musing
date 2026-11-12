@@ -16,11 +16,11 @@ type Phase = "idle" | "reading" | "asking" | "mixing" | "error";
 
 type UnderstoodResult = { museId: string; understood: Understood; source: "live" | "cache" };
 
-type Props = { onPlan: (planId: string) => void };
+type Props = { onPlan: (planId: string) => void; autoFocus?: boolean };
 
 // "what's the move?" one vague thought in. muse reads it, then drafts the plan.
 // nothing leaves this screen until the starter taps "send it" on the draft.
-export function SignalComposer({ onPlan }: Props) {
+export function SignalComposer({ onPlan, autoFocus = false }: Props) {
   const { userId } = useActingUser();
   const { settings, handoff, setHandoff } = usePrefs();
   const [text, setText] = useState("");
@@ -149,6 +149,7 @@ export function SignalComposer({ onPlan }: Props) {
         multiline
         maxLength={280}
         editable={!busy}
+        autoFocus={autoFocus}
         style={styles.input}
         autoCapitalize="none"
         accessibilityLabel={COPY.composerPlaceholder}
