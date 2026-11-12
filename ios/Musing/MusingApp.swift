@@ -44,6 +44,8 @@ struct RootView: View {
         }
         .sheet(isPresented: $app.switcherOpen) { UserSwitcherSheet().environmentObject(app) }
         .overlay { ToastOverlay() }
+        .overlay { if app.needsAccount { AccountPrompt().transition(.opacity) } }
+        .animation(.easeOut(duration: 0.22), value: app.needsAccount)
         .overlay { LaunchIntro() }
         .task {
             Realtime.shared.start()
@@ -223,6 +225,16 @@ struct UserSwitcherSheet: View {
                     }
                     Hairline().padding(.top, 8)
                     VStack(alignment: .leading, spacing: 8) {
+                        Button { app.signOut() } label: {
+                            HStack(spacing: 10) {
+                                Image(systemName: "rectangle.portrait.and.arrow.right").font(.system(size: 16, weight: .semibold))
+                                Text("Log out and choose again").font(.system(size: 16, weight: .semibold))
+                                Spacer()
+                            }
+                            .foregroundStyle(FB.text).padding(.horizontal, 14).padding(.vertical, 12)
+                            .background(FB.input, in: RoundedRectangle(cornerRadius: 8))
+                        }
+                        .buttonStyle(FadePress())
                         Button {
                             Task {
                                 busy = true
@@ -250,6 +262,93 @@ struct UserSwitcherSheet: View {
             }
         }
         .background(Color.white)
+    }
+}
+
+// the first thing a phone asks: who is using it. the demo runs one shared server on the
+// laptop and every phone is a different person, so nobody lands on the same account by
+// default. no passwords: it is a prototype with seeded people.
+struct AccountPrompt: View {
+    @EnvironmentObject var app: AppState
+    @State private var host = UserDefaults.standard.string(forKey: Config.hostOverrideKey) ?? ""
+    @State private var retrying = false
+
+    var body: some View {
+        ZStack {
+            Color.white.ignoresSafeArea()
+            VStack(alignment: .leading, spacing: 0) {
+                (Text("musing").foregroundStyle(FB.text) + Text(".").foregroundStyle(Muse.start))
+                    .font(.system(size: 34, weight: .heavy)).tracking(-1.2)
+                    .padding(.top, 28)
+                Text("Who's using this phone?").font(.system(size: 24, weight: .bold)).foregroundStyle(FB.text).padding(.top, 18)
+                Text("Pick yourself. Each phone in the demo should be a different person. No password, it's a prototype.")
+                    .font(.system(size: 15)).foregroundStyle(FB.muted).padding(.top, 6).fixedSize(horizontal: false, vertical: true)
+
+                if app.users.isEmpty {
+                    if let error = app.usersError { unreachable(error) } else {
+                        HStack { Spacer(); ProgressView(); Spacer() }.padding(.top, 60)
+                    }
+                    Spacer()
+                } else {
+                    ScrollView {
+                        LazyVStack(spacing: 0) {
+                            ForEach(app.users) { u in
+                                Button { app.switchTo(u.id) } label: {
+                                    HStack(spacing: 14) {
+                                        Avatar(u, size: 52)
+                                        VStack(alignment: .leading, spacing: 1) {
+                                            Text(u.name).font(.system(size: 17, weight: .semibold)).foregroundStyle(FB.text)
+                                            Text("@\(u.id)").font(.system(size: 14)).foregroundStyle(FB.muted)
+                                        }
+                                        Spacer()
+                                        Image(systemName: "chevron.right").font(.system(size: 14, weight: .semibold)).foregroundStyle(FB.muted)
+                                    }
+                                    .padding(.vertical, 10).contentShape(Rectangle())
+                                }
+                                .buttonStyle(RowPress())
+                                .accessibilityLabel("Continue as \(u.name)")
+                            }
+                        }
+                        .padding(.bottom, 24)
+                    }
+                    .padding(.top, 14)
+                }
+            }
+            .padding(.horizontal, 20)
+        }
+        .task {
+            // keep trying quietly, so the list appears the moment the laptop is reachable
+            while app.users.isEmpty && !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(3))
+                if app.users.isEmpty { await app.loadUsers() }
+            }
+        }
+    }
+
+    @ViewBuilder private func unreachable(_ error: String) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Can't reach the laptop yet").font(.system(size: 17, weight: .semibold)).foregroundStyle(FB.text)
+            Text("Plug this phone into the Mac running musing., or join the same Wi‑Fi. If it still can't connect, type the Mac's address below.")
+                .font(.system(size: 14)).foregroundStyle(FB.muted).fixedSize(horizontal: false, vertical: true)
+            TextField(Config.devHost ?? "your-mac.local", text: $host)
+                .textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
+                .font(.system(size: 16)).padding(.horizontal, 12).padding(.vertical, 11)
+                .background(FB.input, in: RoundedRectangle(cornerRadius: 8))
+            Button {
+                Task {
+                    retrying = true
+                    UserDefaults.standard.set(host.trimmingCharacters(in: .whitespaces), forKey: Config.hostOverrideKey)
+                    await app.loadUsers()
+                    retrying = false
+                }
+            } label: {
+                Text(retrying ? "Trying…" : "Try again").font(.system(size: 16, weight: .semibold)).foregroundStyle(.white)
+                    .frame(maxWidth: .infinity).padding(.vertical, 12).background(FB.blue, in: RoundedRectangle(cornerRadius: 8))
+            }
+            .buttonStyle(FadePress()).disabled(retrying)
+            Text(error).font(.system(size: 12)).foregroundStyle(FB.muted).lineLimit(2)
+        }
+        .padding(.top, 28)
     }
 }
 

@@ -36,10 +36,15 @@ func toast(_ text: String) { ToastCenter.shared.show(text) }
 final class AppState: ObservableObject {
     private static let userKey = "musing_user"
     private static let traceKey = "musing_trace"
+    private static let chosenKey = "musing_account_chosen"
     private static let demoOrder = ["maya", "alex", "jo", "sam"]
 
     @Published var userId: String
     @Published var users: [User] = []
+    /// true until someone has picked who this phone is. every phone in the demo is a different person.
+    @Published var needsAccount: Bool
+    /// why the list of people could not be loaded, shown on the account prompt
+    @Published var usersError: String?
     /// bumps whenever data should refetch (user switch, reset)
     @Published var version = 0
     @Published var switcherOpen = false
@@ -61,6 +66,7 @@ final class AppState: ObservableObject {
     init() {
         userId = UserDefaults.standard.string(forKey: Self.userKey) ?? "maya"
         traceOn = UserDefaults.standard.bool(forKey: Self.traceKey)
+        needsAccount = !UserDefaults.standard.bool(forKey: Self.chosenKey)
     }
 
     var me: User? { users.first { $0.id == userId } }
@@ -80,15 +86,19 @@ final class AppState: ObservableObject {
             let rows: [User] = try await Supa.select("users", "select=*")
             let rank: (User) -> Int = { Self.demoOrder.firstIndex(of: $0.id) ?? 99 }
             users = rows.sorted { (rank($0), $0.name) < (rank($1), $1.name) }
+            usersError = nil
             if let id = pendingActAs { actAs(id) }
         } catch {
             print("users load failed:", errorText(error))
+            if users.isEmpty { usersError = errorText(error) }
         }
     }
 
     func switchTo(_ id: String) {
         userId = id
         UserDefaults.standard.set(id, forKey: Self.userKey)
+        UserDefaults.standard.set(true, forKey: Self.chosenKey)
+        needsAccount = false
         switcherOpen = false
         version += 1
     }
@@ -102,6 +112,15 @@ final class AppState: ObservableObject {
         }
         pendingActAs = nil
         if id != userId, users.contains(where: { $0.id == id }) { switchTo(id) }
+    }
+
+    /// back to the "who's using this phone?" prompt, for handing the phone to someone else.
+    func signOut() {
+        UserDefaults.standard.set(false, forKey: Self.chosenKey)
+        switcherOpen = false
+        path.removeAll()
+        tab = .home
+        needsAccount = true
     }
 
     func resetDemo() async throws {
