@@ -17,20 +17,28 @@ export function useQuery<T>(fn: () => Promise<T>, deps: unknown[] = []): QuerySt
   const fnRef = useRef(fn);
   fnRef.current = fn;
 
+  // only the newest request may write state. without this, a slow response for the
+  // previous acting user could land after a switch and show the wrong person's view.
+  const seq = useRef(0);
+
   const reload = useCallback(async () => {
+    const mine = ++seq.current;
     try {
       const d = await fnRef.current();
+      if (mine !== seq.current) return;
       setData(d);
       setError(null);
     } catch (e) {
+      if (mine !== seq.current) return;
       setError(e instanceof Error ? e.message : String(e));
     } finally {
-      setLoading(false);
+      if (mine === seq.current) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     setLoading(true);
+    setData(null); // never show the last person's data while the next one loads
     void reload();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reload, version, ...deps]);
