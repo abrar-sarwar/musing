@@ -1,134 +1,196 @@
-import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
-import { useRef, useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { StyleSheet, Text, TextInput, View } from "react-native";
 import { Card } from "@/components/ui/Card";
-import { fb, muse, museGradient } from "@/constants/theme";
+import { fb, muse } from "@/constants/theme";
 import { useActingUser } from "@/lib/acting-user";
-import { apiStream } from "@/lib/api";
+import { apiPost, apiStream, type SseEvent } from "@/lib/api";
+import { usePrefs } from "@/lib/prefs";
 import { COPY } from "@/shared/copy";
 import type { Understood } from "@/shared/types";
+import { GradientButton, QuietButton } from "./GradientButton";
 import { MuseBubble } from "./MuseBubble";
+import { VisibilityPicker } from "./VisibilityPicker";
 
-type Phase = "idle" | "sending" | "done" | "error";
+// idle -> reading (understand) -> [asking: muse has one question] -> mixing (match) -> plan
+type Phase = "idle" | "reading" | "asking" | "mixing" | "error";
 
-export type UnderstoodResult = { museId: string; understood: Understood; source: "live" | "cache"; latencyMs: number };
+type UnderstoodResult = { museId: string; understood: Understood; source: "live" | "cache" };
 
-type Props = {
-  onUnderstood?: (r: UnderstoodResult) => void;
-  prefill?: string;
-};
+type Props = { onPlan: (planId: string) => void };
 
-// "what's the move?" one vague thought in, muse's read of it streamed back.
-export function SignalComposer({ onUnderstood, prefill }: Props) {
+// "what's the move?" one vague thought in. muse reads it, then drafts the plan.
+// nothing leaves this screen until the starter taps "send it" on the draft.
+export function SignalComposer({ onPlan }: Props) {
   const { userId } = useActingUser();
-  const [text, setText] = useState(prefill ?? "");
+  const { settings, handoff, setHandoff } = usePrefs();
+  const [text, setText] = useState("");
   const [phase, setPhase] = useState<Phase>("idle");
   const [reply, setReply] = useState("");
-  const [result, setResult] = useState<UnderstoodResult | null>(null);
+  const [pitch, setPitch] = useState("");
+  const [read, setRead] = useState<UnderstoodResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const abort = useRef<AbortController | null>(null);
 
-  const canSend = text.trim().length >= 2 && phase !== "sending";
+  // a thought handed over from the reels card, a recap or muse's suggestion
+  useEffect(() => {
+    if (handoff && phase === "idle") {
+      setText(handoff);
+      setHandoff(null);
+    }
+  }, [handoff, phase, setHandoff]);
+
+  useEffect(() => () => abort.current?.abort(), []);
+
+  const busy = phase === "reading" || phase === "mixing";
+  const canSend = text.trim().length >= 2 && !busy;
+
+  function fail(e: unknown) {
+    setError(e instanceof Error ? e.message : String(e));
+    setPhase("error");
+  }
+
+  async function mix(museId: string) {
+    setPhase("mixing");
+    setPitch("");
+    let planId: string | null = null;
+    let streamError: string | null = null;
+    await apiStream(
+      "/api/muse/match",
+      userId,
+      { museId },
+      (ev: SseEvent) => {
+        if (ev.event === "delta") setPitch((p) => p + String((ev.data as { text: string }).text));
+        else if (ev.event === "restart") setPitch("");
+        else if (ev.event === "done") planId = (ev.data as { planId: string }).planId;
+        else if (ev.event === "error") streamError = String((ev.data as { message: string }).message);
+      },
+      abort.current?.signal,
+    );
+    if (streamError) throw new Error(streamError);
+    if (!planId) throw new Error("muse didn't finish the plan");
+    reset();
+    onPlan(planId);
+  }
 
   async function send() {
     if (!canSend) return;
-    setPhase("sending");
-    setReply("");
-    setResult(null);
     setError(null);
+    setReply("");
+    setRead(null);
     abort.current?.abort();
     abort.current = new AbortController();
     try {
+      if (!settings.muse_on) {
+        // muse off: what's left is a plain poll to the first few friends
+        setPhase("mixing");
+        const r = await apiPost<{ planId: string }>("/api/plans", userId, { text: text.trim() });
+        reset();
+        onPlan(r.planId);
+        return;
+      }
+      setPhase("reading");
+      let result: UnderstoodResult | null = null;
+      let streamError: string | null = null;
       await apiStream(
         "/api/muse/understand",
         userId,
         { text: text.trim() },
-        (ev) => {
+        (ev: SseEvent) => {
           if (ev.event === "delta") setReply((r) => r + String((ev.data as { text: string }).text));
-          else if (ev.event === "done") {
-            const r = ev.data as UnderstoodResult;
-            setReply(r.understood.reply);
-            setResult(r);
-            setPhase("done");
-            onUnderstood?.(r);
-          } else if (ev.event === "error") {
-            throw new Error(String((ev.data as { message: string }).message));
-          }
+          else if (ev.event === "restart") setReply("");
+          else if (ev.event === "done") result = ev.data as UnderstoodResult;
+          else if (ev.event === "error") streamError = String((ev.data as { message: string }).message);
         },
         abort.current.signal,
       );
-      setPhase((p) => (p === "sending" ? "done" : p));
+      if (streamError) throw new Error(streamError);
+      const r = result as UnderstoodResult | null;
+      if (!r) throw new Error("muse didn't answer");
+      setReply(r.understood.reply);
+      setRead(r);
+      if (r.understood.clarifying_question) {
+        setPhase("asking"); // muse has one question. the person can answer or skip it.
+        return;
+      }
+      await mix(r.museId);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-      setPhase("error");
+      fail(e);
+    }
+  }
+
+  async function goAnyway() {
+    if (!read) return;
+    try {
+      await mix(read.museId);
+    } catch (e) {
+      fail(e);
     }
   }
 
   function reset() {
+    abort.current?.abort();
     setText("");
     setReply("");
-    setResult(null);
+    setPitch("");
+    setRead(null);
     setError(null);
     setPhase("idle");
   }
 
-  const u = result?.understood;
+  const u = read?.understood;
 
   return (
     <Card style={styles.card}>
-      <View style={styles.inputWrap}>
-        <TextInput
-          value={text}
-          onChangeText={setText}
-          placeholder={COPY.composerPlaceholder}
-          placeholderTextColor={fb.muted}
-          multiline
-          maxLength={280}
-          editable={phase !== "sending"}
-          style={styles.input}
-          autoCapitalize="none"
-          autoCorrect
-          returnKeyType="send"
-          blurOnSubmit
-          onSubmitEditing={send}
+      <TextInput
+        value={text}
+        onChangeText={setText}
+        placeholder={COPY.composerPlaceholder}
+        placeholderTextColor={fb.muted}
+        multiline
+        maxLength={280}
+        editable={!busy}
+        style={styles.input}
+        autoCapitalize="none"
+        accessibilityLabel={COPY.composerPlaceholder}
+      />
+      <View style={styles.row}>
+        {settings.muse_on ? <VisibilityPicker /> : <Text style={styles.offChip}>muse is off · plain poll</Text>}
+        <View style={{ flex: 1 }} />
+        {(phase === "error" || phase === "asking") && <QuietButton label="start over" onPress={reset} />}
+        <GradientButton
+          label={phase === "reading" ? "muse is reading" : phase === "mixing" ? (settings.muse_on ? "finding your people" : "sending") : settings.muse_on ? "send it to muse" : "ask the poll"}
+          icon="arrow-up"
+          onPress={send}
+          disabled={!canSend}
+          busy={busy}
         />
       </View>
-      <View style={styles.row}>
-        <View style={styles.chip}>
-          <Ionicons name="people-outline" size={14} color={fb.muted} />
-          <Text style={styles.chipText}>just friends</Text>
-        </View>
-        <View style={{ flex: 1 }} />
-        {phase === "done" || phase === "error" ? (
-          <Pressable onPress={reset} hitSlop={8} style={styles.ghostBtn}>
-            <Text style={styles.ghostText}>start over</Text>
-          </Pressable>
-        ) : null}
-        <Pressable onPress={send} disabled={!canSend} accessibilityRole="button" accessibilityLabel="send to muse">
-          <LinearGradient colors={[...museGradient]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.sendBtn, !canSend && { opacity: 0.45 }]}>
-            {phase === "sending" ? <ActivityIndicator color="#fff" size="small" /> : <Ionicons name="arrow-up" size={18} color="#fff" />}
-            <Text style={styles.sendText}>{phase === "sending" ? "muse is reading" : "send it"}</Text>
-          </LinearGradient>
-        </Pressable>
-      </View>
-      <Text style={styles.hint}>nobody sees this but you and muse.</Text>
+      <Text style={styles.hint}>{settings.muse_on ? "only you and muse see this. nothing goes to anyone until you say so." : "without muse this goes out as typed, to the first few friends on your list."}</Text>
 
-      {(phase === "sending" || phase === "done") && (
+      {settings.muse_on && phase !== "idle" && phase !== "error" && (
         <View style={styles.replyWrap}>
-          <MuseBubble text={reply} thinking={phase === "sending"} />
+          <MuseBubble text={reply} thinking={phase === "reading"} />
           {u && (
             <View style={styles.tags}>
               <Tag>{u.activity}</Tag>
               {u.time_hint !== "unspecified" && <Tag>{u.time_hint}</Tag>}
               <Tag>{u.vibe}</Tag>
-              {result?.source === "cache" && <Tag muted>cached</Tag>}
+              {read?.source === "cache" && <Tag muted>replayed</Tag>}
             </View>
           )}
-          {u?.clarifying_question && <Text style={styles.question}>{u.clarifying_question}</Text>}
+          {phase === "asking" && u?.clarifying_question && (
+            <>
+              <MuseBubble text={u.clarifying_question} />
+              <View style={styles.askRow}>
+                <Text style={styles.askHint}>add a little more above and send again, or</Text>
+                <QuietButton label="go with it" onPress={goAnyway} />
+              </View>
+            </>
+          )}
+          {phase === "mixing" && <MuseBubble text={pitch} thinking label={COPY.pitchLead} />}
         </View>
       )}
-      {phase === "error" && <Text style={styles.error}>muse couldn&apos;t read that: {error}. try again in a sec.</Text>}
+      {phase === "error" && <Text style={styles.error}>that didn&apos;t go through ({error}). your thought is still here. try again in a sec.</Text>}
     </Card>
   );
 }
@@ -143,20 +205,15 @@ function Tag({ children, muted = false }: { children: string; muted?: boolean })
 
 const styles = StyleSheet.create({
   card: { marginHorizontal: 12, borderRadius: 16, padding: 14, gap: 10 },
-  inputWrap: { minHeight: 72 },
-  input: { fontSize: 18, lineHeight: 24, color: fb.text, textAlignVertical: "top", paddingTop: 4 },
+  input: { minHeight: 64, fontSize: 19, lineHeight: 25, color: fb.text, textAlignVertical: "top", paddingTop: 4 },
   row: { flexDirection: "row", alignItems: "center", gap: 8 },
-  chip: { flexDirection: "row", alignItems: "center", gap: 4, borderRadius: 999, backgroundColor: fb.input, paddingHorizontal: 10, paddingVertical: 6 },
-  chipText: { fontSize: 13, color: fb.muted },
-  ghostBtn: { paddingHorizontal: 10, paddingVertical: 8 },
-  ghostText: { fontSize: 14, color: fb.muted },
-  sendBtn: { flexDirection: "row", alignItems: "center", gap: 6, borderRadius: 999, paddingHorizontal: 14, height: 38 },
-  sendText: { color: "#fff", fontWeight: "600", fontSize: 14 },
-  hint: { fontSize: 12, color: fb.muted },
+  offChip: { fontSize: 13, color: fb.muted },
+  hint: { fontSize: 12, color: fb.muted, lineHeight: 16 },
   replyWrap: { gap: 10, paddingTop: 4 },
   tags: { flexDirection: "row", flexWrap: "wrap", gap: 6, paddingLeft: 40 },
   tag: { backgroundColor: muse.soft, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 },
   tagText: { fontSize: 13, color: muse.text, fontWeight: "600" },
-  question: { paddingLeft: 40, fontSize: 15, color: fb.text },
-  error: { fontSize: 14, color: fb.red },
+  askRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingLeft: 40 },
+  askHint: { flex: 1, fontSize: 13, color: fb.muted },
+  error: { fontSize: 14, color: fb.red, lineHeight: 19 },
 });

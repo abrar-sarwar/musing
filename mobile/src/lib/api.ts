@@ -29,6 +29,16 @@ export async function apiPost<T>(path: string, userId: string, body?: object): P
   return parse<T>(res);
 }
 
+export async function apiDelete<T>(path: string, userId: string): Promise<T> {
+  const res = await fetch(`${API_URL}${path}`, { method: "DELETE", headers: { [USER_HEADER]: userId } });
+  return parse<T>(res);
+}
+
+// server paths like "/api/posters/<id>" need the api host in front on a phone
+export function absoluteUrl(pathOrUrl: string): string {
+  return pathOrUrl.startsWith("/") ? `${API_URL}${pathOrUrl}` : pathOrUrl;
+}
+
 export type SseEvent = { event: string; data: unknown };
 
 // server-sent events over expo/fetch (streaming bodies work in expo go).
@@ -48,7 +58,13 @@ export async function apiStream(
   });
   if (!res.ok || !res.body) {
     const text = await res.text().catch(() => "");
-    throw new ApiError(text || `http ${res.status}`, res.status);
+    let message = text || `http ${res.status}`;
+    try {
+      message = (JSON.parse(text) as { error?: string }).error ?? message;
+    } catch {
+      /* not json */
+    }
+    throw new ApiError(message, res.status);
   }
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
