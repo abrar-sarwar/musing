@@ -41,6 +41,7 @@ struct ProfileView: View {
         ScrollView {
             VStack(spacing: 0) {
                 Pic(path: info.cover).frame(height: 310)
+                    .overlay(alignment: .top) { LinearGradient(colors: [.black.opacity(0.45), .clear], startPoint: .top, endPoint: .bottom).frame(height: 130) }
                     .overlay(alignment: .top) { coverBar.padding(.top, 60).padding(.horizontal, 12) }
                 identity
                     .background(Color.white, in: UnevenRoundedRectangle(topLeadingRadius: 22, topTrailingRadius: 22))

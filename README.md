@@ -2,11 +2,11 @@
 
 hackathon prototype for meta's closer together ai hackathon. muse turns one vague thought into a real plan with friends, and nobody has to risk asking.
 
-- `mobile/` expo app (the product ui)
+- `ios/` native swift app (swiftui, the product ui). no expo, no react native.
 - `web/` next.js api server (every muse call and every write) + an optional web shell
 - `supabase/` schema + local stack
 
-secrets live in `web/.env.local` (never committed). the app reads `mobile/.env`.
+secrets live in `web/.env.local` (never committed). the app reads `ios/.env` (copy `ios/env.example`).
 
 ## run it
 
@@ -14,10 +14,12 @@ secrets live in `web/.env.local` (never committed). the app reads `mobile/.env`.
 supabase start                      # from the repo root. api on 56321, db on 56322
 cd web && pnpm dev                  # api server on :3000
 cd web && pnpm seed                 # first time only, or use "Reset demo data" in the app
-cd mobile && npm run ios            # builds the native app with xcode and opens it in the simulator
+open ios/Musing.xcodeproj           # pick a simulator or your phone, press run
 ```
 
-the app only runs as a native xcode build. expo go is not supported. to put it on a phone, run `npm run ios -- --device`, or open `mobile/ios/musing.xcworkspace` in xcode and press run (the first `npm run ios` generates that folder). once the app is installed, `npm start` is enough to serve the js to it.
+the app is a plain xcode project written in swift. it has no package dependencies, so there is nothing to install. the project file is generated from `ios/project.yml`; after adding or removing a swift file run `cd ios && xcodegen generate` (`brew install xcodegen`).
+
+on a physical phone, localhost is the phone. the build writes this mac's lan ip into the app, so the phone reaches the laptop as long as both are on the same wifi. if it picks the wrong address, set it in the app under Menu > Server address.
 
 If you add a route folder under `web/app/api` while `pnpm dev` is running and it 404s, restart `pnpm dev`. The file watcher misses new folders when the machine is under load.
 
@@ -42,7 +44,7 @@ If you add a route folder under `web/app/api` while `pnpm dev` is running and it
 
 - musing. tab, bottom: **muse** on/off (off = plain poll) and **muse trace** (each step, model, latency).
 - Menu tab: **Reset demo data**, **Replay cached Muse** (serve the last good responses, for when the network dies on stage), **Invite posters** (the ~45s image call).
-- any deep link with `?as=<userId>` opens as that person, e.g. `musing://musing?as=alex`. the avatar in the top bar also switches users.
+- any link with `?as=<userId>` opens as that person, e.g. `musing://musing?as=alex`. every screen has a link (`musing://reels`, `musing://menu`, `musing://plan/<id>`), and `-open <target>` as a launch argument starts the app there. the avatar in the top bar also switches users.
 
 ## demo script (two phones, about 90 seconds)
 

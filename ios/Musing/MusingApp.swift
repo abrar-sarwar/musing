@@ -44,17 +44,34 @@ struct RootView: View {
         .overlay { LaunchIntro() }
         .task {
             Realtime.shared.start()
+            // `-open reels` (or any link target) as a launch argument starts on that screen
+            if let target = UserDefaults.standard.string(forKey: "open"), let url = URL(string: "musing://\(target)") { open(url) }
             await app.loadUsers()
         }
         .task(id: app.version) { await app.loadSettings() }
         .onChange(of: app.version) { Task { await app.loadUsers() } }
         .onTableChange("app_settings") { Task { await app.loadSettings() } }
-        .onOpenURL { url in
-            // musing://musing?as=alex opens the musing. surface as alex
-            let comps = URLComponents(url: url, resolvingAgainstBaseURL: false)
-            if let who = comps?.queryItems?.first(where: { $0.name == "as" })?.value { app.actAs(who) }
-            let target = (url.host ?? "") + url.path
-            if target.contains("musing") { app.path = [.musing(compose: false)] }
+        .onOpenURL { open($0) }
+    }
+
+    private func open(_ url: URL) {
+        // musing://musing?as=alex opens the musing. surface as alex
+        let comps = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        if let who = comps?.queryItems?.first(where: { $0.name == "as" })?.value { app.actAs(who) }
+        // every screen has a link: musing://reels, musing://menu, musing://plan/<id>, ...
+        let arg = url.pathComponents.dropFirst().first
+        switch url.host ?? "" {
+        case "musing": app.path = [.musing(compose: false)]
+        case "home", "reels", "marketplace", "dating", "notifications", "profile": if let tab = AppTab(rawValue: url.host ?? "") { app.go(tab) }
+        case "menu": app.path = [.menu]
+        case "search": app.path = [.search]
+        case "messages": app.path = arg.map { [.messages, .thread($0)] } ?? [.messages]
+        case "events": app.path = arg.map { [.events, .event($0)] } ?? [.events]
+        case "listing": if let arg { app.path = [.listing(arg)] }
+        case "people": if let arg { app.path = [.person(arg)] }
+        case "plan": if let arg { app.path = [.musing(compose: false), .plan(arg)] }
+        case "settings": app.path = [.musingSettings]
+        default: break
         }
     }
 }
