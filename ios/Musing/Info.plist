@@ -42,6 +42,10 @@
 	</dict>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>musing. talks to the prototype server running on your laptop.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+	</array>
 	<key>UILaunchScreen</key>
 	<dict>
 		<key>UIColorName</key>

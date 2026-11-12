@@ -470,7 +470,7 @@ struct DatingScreen: View {
 
 // ---------- notifications ----------
 
-private struct NoteRow: Identifiable {
+struct NoteRow: Identifiable {
     enum Who { case person(Person), muse, facebook, image(String) }
     let id: String
     let parts: [Mock.Part]
@@ -500,7 +500,7 @@ private func nameList(_ people: [Person]) -> String {
 
 // musing. rows, built from what this person is allowed to see. before a plan is
 // happening they carry a count, never names.
-private func musingRows(_ home: MusingHome?, me: String) -> [NoteRow] {
+func musingRows(_ home: MusingHome?, me: String) -> [NoteRow] {
     guard let home else { return [] }
     var rows: [NoteRow] = []
     func add(_ p: PlanView, _ key: String, _ parts: [Mock.Part], _ who: NoteRow.Who, unread: Bool = true) {

@@ -57,6 +57,15 @@ struct RootView: View {
             await app.loadSettings()
             await app.loadCatalog()
         }
+        // lock-screen and home-screen notifications for whoever this phone is
+        .task(id: "\(app.userId)-\(app.needsAccount)") {
+            guard !app.needsAccount else { return }
+            await Notifier.shared.watch(user: app.userId)
+            if let link = Notifier.shared.takePendingLink() { open(link) }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .openLink)) { _ in
+            if let link = Notifier.shared.takePendingLink() { open(link) }
+        }
         .onChange(of: app.version) { Task { await app.loadUsers() } }
         .onTableChange("app_settings") { Task { await app.loadSettings() } }
         .onOpenURL { open($0) }
