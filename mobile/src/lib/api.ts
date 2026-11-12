@@ -41,7 +41,7 @@ export function absoluteUrl(pathOrUrl: string): string {
 
 export type SseEvent = { event: string; data: unknown };
 
-// server-sent events over expo/fetch (streaming bodies work in expo go).
+// server-sent events over expo/fetch (it supports streaming bodies).
 // calls onEvent for every "event:/data:" block until the stream closes.
 export async function apiStream(
   path: string,

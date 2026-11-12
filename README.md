@@ -14,8 +14,10 @@ secrets live in `web/.env.local` (never committed). the app reads `mobile/.env`.
 supabase start                      # from the repo root. api on 56321, db on 56322
 cd web && pnpm dev                  # api server on :3000
 cd web && pnpm seed                 # first time only, or use "Reset demo data" in the app
-cd mobile && npx expo start         # press i for the simulator, or scan with expo go
+cd mobile && npm run ios            # builds the native app with xcode and opens it in the simulator
 ```
+
+the app only runs as a native xcode build. expo go is not supported. to put it on a phone, run `npm run ios -- --device`, or open `mobile/ios/musing.xcworkspace` in xcode and press run (the first `npm run ios` generates that folder). once the app is installed, `npm start` is enough to serve the js to it.
 
 If you add a route folder under `web/app/api` while `pnpm dev` is running and it 404s, restart `pnpm dev`. The file watcher misses new folders when the machine is under load.
 
@@ -40,7 +42,7 @@ If you add a route folder under `web/app/api` while `pnpm dev` is running and it
 
 - musing. tab, bottom: **muse** on/off (off = plain poll) and **muse trace** (each step, model, latency).
 - Menu tab: **Reset demo data**, **Replay cached Muse** (serve the last good responses, for when the network dies on stage), **Invite posters** (the ~45s image call).
-- any deep link with `?as=<userId>` opens as that person, e.g. `exp://<host>:8081/--/musing?as=alex`. the avatar in the top bar also switches users.
+- any deep link with `?as=<userId>` opens as that person, e.g. `musing://musing?as=alex`. the avatar in the top bar also switches users.
 
 ## demo script (two phones, about 90 seconds)
 
