@@ -33,3 +33,11 @@ export function cleanText(v: unknown, max: number): string | null {
   const t = v.trim().slice(0, max);
   return t.length > 0 ? t : null;
 }
+
+// reset and the demo switches change state for everyone, and muse calls cost money.
+// on a deployed server they need the admin token; a local dev server stays open.
+export function requireAdmin(req: Request): void {
+  if (process.env.NODE_ENV !== "production") return;
+  const token = process.env.ADMIN_TOKEN;
+  if (!token || req.headers.get("x-admin-token") !== token) throw new PlanError("not allowed", 403);
+}

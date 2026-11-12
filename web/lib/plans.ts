@@ -1,4 +1,5 @@
 import { serverDb } from "@/lib/db/server";
+import { planOpportunities } from "@/lib/discover";
 import { coordinate } from "@/lib/muse/coordinate";
 import { create } from "@/lib/muse/create";
 import type { Matched } from "@/lib/muse/match";
@@ -94,6 +95,7 @@ async function buildView(b: Bundle, viewerId: string): Promise<PlanView | null> 
     // the chat is for people who are in. the event page is fine for anyone who was asked.
     threadId: happening && (isStarter || mine?.status === "down") ? plan.thread_id : null,
     eventId: happening ? plan.event_id : null,
+    opportunities: await planOpportunities(plan.id),
     updatedAt: plan.updated_at,
   };
 }
@@ -150,6 +152,8 @@ export async function createDraftFromMatch(museId: string, starterId: string, m:
       pitch: lower(m.hear_me_out),
       quorum: Math.min(QUORUM, m.picks.length),
       muse_on: true,
+      // a plan built around a public event keeps that event's day, time and place
+      public_event_id: m.event_id,
     })
     .select("id")
     .single();
@@ -158,6 +162,15 @@ export async function createDraftFromMatch(museId: string, starterId: string, m:
     m.picks.map((p) => ({ plan_id: plan.id, user_id: p.user_id, reason: lower(p.reason), personal_ask: lower(p.personal_ask) })),
   );
   if (e2) throw new Error(`plan_members insert: ${e2.message}`);
+  const found = [
+    ...(m.event_id ? [{ plan_id: plan.id, kind: "event", ref_id: m.event_id, reason: m.event_reason ? lower(m.event_reason) : null }] : []),
+    ...(m.group_id ? [{ plan_id: plan.id, kind: "group", ref_id: m.group_id, reason: m.group_reason ? lower(m.group_reason) : null }] : []),
+    ...m.listings.map((l) => ({ plan_id: plan.id, kind: "listing", ref_id: l.listing_id, reason: lower(l.reason) })),
+  ];
+  if (found.length > 0) {
+    const { error: e3 } = await db.from("plan_opportunities").insert(found);
+    if (e3) throw new Error(`plan_opportunities insert: ${e3.message}`);
+  }
   return plan.id as string;
 }
 
@@ -299,6 +312,9 @@ export async function makeItReal(planId: string): Promise<void> {
     };
   }
 
+  // the public event, group and listings this plan uses ride along on the card. the
+  // private event made below is this group's plan to go, not a second public event.
+  const found = (await planOpportunities(planId)).map((o) => ({ kind: o.kind, id: o.id, title: o.title, sub: o.sub }));
   const { data: thread, error: e1 } = await db.from("threads").insert({ title: lower(made.thread_title), member_ids: going }).select("id").single();
   if (e1 || !thread) throw new Error(`thread insert: ${e1?.message}`);
   const { data: event, error: e2 } = await db
@@ -311,7 +327,7 @@ export async function makeItReal(planId: string): Promise<void> {
     thread_id: thread.id,
     sender_id: null,
     body: lower(made.announce),
-    card: { type: "plan", plan_id: planId, event_id: event.id, title: plan.activity, when: plan.when_text, where: plan.where_text, line: lower(made.announce) },
+    card: { type: "plan", plan_id: planId, event_id: event.id, title: plan.activity, when: plan.when_text, where: plan.where_text, line: lower(made.announce), found },
   });
   await db.from("plans").update({ thread_id: thread.id, event_id: event.id, updated_at: new Date().toISOString() }).eq("id", planId);
 
@@ -361,8 +377,10 @@ export async function whatIf(input: WhatIfInput, onText: (delta: string) => void
     const { error } = await db.from("plan_private_limits").upsert({ plan_id: plan.id, user_id: input.userId, limit_text: input.privateLimit, updated_at: now() });
     if (error) throw new Error(`private limit: ${error.message}`);
   }
-  // everyone watching this plan sees "muse is reworking it" within a second or two
-  await db.from("plans").update({ solving: true, updated_at: now() }).eq("id", plan.id);
+  // everyone watching this plan sees "muse is reworking it" within a second or two.
+  // conditional update: of two requests that arrive together, only one gets to re-solve.
+  const { data: locked } = await db.from("plans").update({ solving: true, updated_at: now() }).eq("id", plan.id).eq("solving", false).eq("state", "proposing").select("id");
+  if (!locked || locked.length === 0) throw new PlanError("muse is already reworking this one. give it a sec.", 409);
 
   try {
     const [{ data: limits }, settings] = await Promise.all([db.from("plan_private_limits").select("user_id,limit_text").eq("plan_id", plan.id), getSettings()]);
@@ -378,6 +396,7 @@ export async function whatIf(input: WhatIfInput, onText: (delta: string) => void
         }),
         asker: { id: asker.id, firstName: lower(firstName(asker.name)) },
         counteroffer: input.counteroffer,
+        fixedEvent: plan.public_event_id ? true : false,
         privateLimits: (limits ?? []).map((l) => ({ firstName: lower(firstName(users.get(l.user_id as string)?.name ?? "someone")), text: l.limit_text as string })),
         preferCache: settings.muse_replay,
       },
@@ -385,6 +404,13 @@ export async function whatIf(input: WhatIfInput, onText: (delta: string) => void
       onRestart,
     );
     const o = r.data;
+    // a public event does not move for anyone. whatever came back, its time and place stand.
+    if (plan.public_event_id) {
+      o.when_day = (plan.when_day ?? o.when_day) as typeof o.when_day;
+      o.when_time = plan.when_time ?? o.when_time;
+      o.when_text = plan.when_text ?? o.when_text;
+      o.where_text = plan.where_text ?? o.where_text;
+    }
     const timeMoved = o.when_day !== plan.when_day || o.when_time !== plan.when_time;
     const changed = o.changed || timeMoved || lower(o.where_text) !== plan.where_text;
 

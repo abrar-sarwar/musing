@@ -1,4 +1,5 @@
 import { serverDb } from "@/lib/db/server";
+import { describeContext, validContext } from "@/lib/discover";
 import { fail, requireUser } from "@/lib/http";
 import { sseResponse } from "@/lib/muse/sse";
 import { understand } from "@/lib/muse/understand";
@@ -6,10 +7,10 @@ import { getSettings } from "@/lib/settings";
 import { firstName } from "@/lib/time";
 import { todayLine } from "@/lib/when";
 
-// POST { text } -> sse: "muse" {museId}, "delta" {text}..., "done" {museId, understood, source, latencyMs}
+// POST { text, context? } -> sse: "muse" {museId}, "delta" {text}..., "done" {museId, understood, source, latencyMs}
 export async function POST(req: Request) {
   try {
-    const body = (await req.json().catch(() => ({}))) as { text?: unknown };
+    const body = (await req.json().catch(() => ({}))) as { text?: unknown; context?: unknown };
     const text = typeof body.text === "string" ? body.text.trim() : "";
     if (text.length < 2 || text.length > 280) {
       return Response.json({ ok: false, error: "say a little more (2 to 280 characters)" }, { status: 400 });
@@ -19,13 +20,16 @@ export async function POST(req: Request) {
     if (!settings.muse_on) return Response.json({ ok: false, error: "muse is off" }, { status: 409 });
 
     const db = serverDb();
-    const { data: muse, error } = await db.from("muses").insert({ user_id: user.id, raw_text: text }).select("id").single();
+    // where the thought started (a listing, an event, a group, a reel), checked against the catalog
+    const context = await validContext(body.context);
+    const startedFrom = await describeContext(context);
+    const { data: muse, error } = await db.from("muses").insert({ user_id: user.id, raw_text: text, context }).select("id").single();
     if (error || !muse) throw new Error(error?.message ?? "insert failed");
 
     return sseResponse(async (send) => {
       send("muse", { museId: muse.id });
       const r = await understand(
-        { text, starterName: firstName(user.name).toLowerCase(), interests: user.interests, today: todayLine(), preferCache: settings.muse_replay },
+        { text, startedFrom, starterName: firstName(user.name).toLowerCase(), interests: user.interests, today: todayLine(), preferCache: settings.muse_replay },
         (delta) => send("delta", { text: delta }),
         () => send("restart", {}),
       );

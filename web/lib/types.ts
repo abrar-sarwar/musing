@@ -61,6 +61,7 @@ export type Plan = {
   when_time: string | null;
   thread_id: string | null;
   event_id: string | null;
+  public_event_id: string | null; // set when the plan is to go to a public event. its time and place are fixed.
   quorum: number;
   muse_on: boolean;
   created_at: string;
@@ -161,6 +162,9 @@ export type PlanView = {
   } | null; // members only
   threadId: string | null;
   eventId: string | null;
+  // what muse found for this plan: at most one public event, one group, two listings.
+  // catalog records only. never anyone's membership, saves or history.
+  opportunities: Array<{ kind: "event" | "group" | "listing"; id: string; title: string; sub: string; reason: string | null; cover: string | null }>;
   updatedAt: string;
 };
 

@@ -31,6 +31,8 @@ return these fields:
 
 export type UnderstandInput = {
   text: string;
+  /** one line on what they were looking at when they typed it, if anything */
+  startedFrom?: string | null;
   starterName: string;
   interests: string[];
   today: string; // "thursday, november 12"
@@ -43,7 +45,7 @@ export function understand(input: UnderstandInput, onText?: (delta: string) => v
     schema: UnderstandSchema,
     schemaName: "understood_signal",
     system: SYSTEM,
-    user: `today is ${input.today}. ${input.starterName} is into: ${input.interests.join(", ") || "nothing listed"}.\n${input.starterName} typed: "${input.text}"`,
+    user: `today is ${input.today}. ${input.starterName} is into: ${input.interests.join(", ") || "nothing listed"}.\n${input.startedFrom ? `${input.startedFrom}. read the thought in that light.\n` : ""}${input.starterName} typed: "${input.text}"`,
     summarize: (o) => `activity=${o.activity} · time=${o.time_hint} · vibe=${o.vibe}`,
     preferCache: input.preferCache,
     stream: onText ? { field: "reply", onText, onRestart } : undefined,

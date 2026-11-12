@@ -1,4 +1,5 @@
 import { serverDb } from "@/lib/db/server";
+import { describeContext, discover, validContext } from "@/lib/discover";
 import { fail, requireUser } from "@/lib/http";
 import { match, type Candidate } from "@/lib/muse/match";
 import { sseResponse } from "@/lib/muse/sse";
@@ -41,7 +42,15 @@ export async function POST(req: Request) {
       reelsTopics: f.reels_opt_in ? (topics ?? []).filter((t) => t.user_id === f.id).map((t) => t.topic as string) : null,
     }));
 
+    // discovery: fast server-side search before muse is called. muse chooses among these.
+    const context = await validContext(muse.context);
+    const t0 = Date.now();
+    const found = await discover({ text: muse.raw_text as string, activity: understood.data.activity, budgetHint: understood.data.budget_hint, starterFree: user.free_windows, context });
+    const startedFrom = await describeContext(context);
+    const discoverMs = Date.now() - t0;
+
     return sseResponse(async (send) => {
+      send("found", { events: found.events.length, groups: found.groups.length, listings: found.listings.length, ms: discoverMs });
       const r = await match(
         {
           starter: { id: user.id, firstName: firstName(user.name).toLowerCase(), interests: user.interests, free_windows: user.free_windows },
@@ -49,6 +58,8 @@ export async function POST(req: Request) {
           understood: understood.data,
           candidates,
           today: todayLine(),
+          found: { events: found.events, groups: found.groups, listings: found.listings },
+          startedFrom,
           preferCache: settings.muse_replay,
         },
         (delta) => send("delta", { text: delta }),

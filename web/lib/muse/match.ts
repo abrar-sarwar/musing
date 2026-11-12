@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { Candidates } from "@/lib/discover";
 import type { FreeWindow } from "@/lib/types";
 import { DAYS, isFreeAt, isTime, windowsLine } from "@/lib/when";
 import { runStructured, type StructuredResult } from "./run";
@@ -21,6 +22,12 @@ export const MatchSchema = z.object({
   when_text: z.string(),
   when_time: z.string(),
   where_text: z.string(),
+  // opportunity discovery. ids come from the lists the backend found, or stay null / empty.
+  event_id: z.string().nullable(),
+  event_reason: z.string().nullable(),
+  group_id: z.string().nullable(),
+  group_reason: z.string().nullable(),
+  listings: z.array(z.object({ listing_id: z.string(), reason: z.string() })),
 });
 
 export type Matched = z.infer<typeof MatchSchema>;
@@ -40,6 +47,10 @@ export type MatchInput = {
   understood: Understood;
   candidates: Candidate[];
   today: string;
+  /** what the backend found for this thought. muse may only choose from these. */
+  found: Candidates;
+  /** one line on where the thought started (a listing, an event, a group, a reel), if anywhere */
+  startedFrom: string | null;
   planId?: string | null;
   preferCache?: boolean;
 };
@@ -69,7 +80,17 @@ return these fields:
 - when_day: one of sun, mon, tue, wed, thu, fri, sat.
 - when_time: 24 hour start time, "HH:MM".
 - when_text: how a friend would say it ("saturday around 1").
-- where_text: a kind of place, not a real business name ("a couple of thrift spots downtown, coffee after").`;
+- where_text: a kind of place, not a real business name ("a couple of thrift spots downtown, coffee after"). if you chose an event, its area.
+
+things found around this thought. the backend searched public events, groups and marketplace listings and gives you what it found. build one coherent move, not a list of links:
+- use only ids from those lists. never invent an event, a group, a listing, a price, a date or a place. if a list is empty, leave that part out.
+- do not force anything in. a simple dinner needs no listing. leave out whatever does not make this plan better.
+- event_id: at most one event, and only when going to it IS the plan (a pop-up for a thrift run, a photo walk for a photography outing). its day, time and area are fixed: copy them into when_day, when_time, when_text and where_text exactly, and only pick friends who are free then. otherwise null.
+- event_reason: one short line on why this event fits, under 80 characters. null when event_id is null.
+- group_id: at most one group worth a look for this activity. otherwise null. nobody is joined to anything.
+- group_reason: one short line, under 80 characters. null when group_id is null.
+- listings: zero, one or two listings that would genuinely help with this plan, each with a reason under 80 characters. they are optional things to look at, never purchases. if the person started from a listing, include it.
+- never say or imply that a friend is in a group, saw a listing or is going to an event.`;
 
 function userPrompt(i: MatchInput): string {
   const lines = i.candidates.map((c) => {
@@ -82,7 +103,16 @@ they typed: "${i.rawText}"
 what you understood: activity=${i.understood.activity}; time=${i.understood.time_hint}; vibe=${i.understood.vibe}; budget=${i.understood.budget_hint}; group=${i.understood.group_size_hint}
 
 candidate friends:
-${lines.join("\n")}`;
+${lines.join("\n")}
+
+${i.startedFrom ? `where this started: ${i.startedFrom}\n\n` : ""}public events found:
+${i.found.events.map((e) => `- ${e.id} | ${e.title} | ${e.when_day} ${e.when_time} (${e.when_text}) | ${e.area} | ${e.description}`).join("\n") || "- none"}
+
+groups found:
+${i.found.groups.map((g) => `- ${g.id} | ${g.name} | ${g.area} | ${g.description}`).join("\n") || "- none"}
+
+marketplace listings found:
+${i.found.listings.map((l) => `- ${l.id} | ${l.title} | $${l.price} | ${l.category.toLowerCase()} | ${l.place}`).join("\n") || "- none"}`;
 }
 
 export function match(input: MatchInput, onText?: (delta: string) => void, onRestart?: () => void): Promise<StructuredResult<Matched>> {
@@ -100,7 +130,7 @@ export function match(input: MatchInput, onText?: (delta: string) => void, onRes
     schemaName: "the_mix",
     system: SYSTEM,
     user: userPrompt(input),
-    maxTokens: 2000,
+    maxTokens: 2400,
     planId: input.planId,
     preferCache: input.preferCache,
     // the backend is the only source of user ids. anything else is rejected here.
@@ -115,11 +145,29 @@ export function match(input: MatchInput, onText?: (delta: string) => void, onRes
         if (seen.has(p.user_id)) return `duplicate pick "${p.user_id}"`;
         seen.add(p.user_id);
       }
+      // every opportunity id must be one the backend returned for this thought
+      if (o.event_id === "" || o.event_id === "null") o.event_id = null;
+      if (o.group_id === "" || o.group_id === "null") o.group_id = null;
+      const ev = o.event_id ? input.found.events.find((e) => e.id === o.event_id) : null;
+      if (o.event_id && !ev) return `unknown event id "${o.event_id}"`;
+      if (o.group_id && !input.found.groups.some((g) => g.id === o.group_id)) return `unknown group id "${o.group_id}"`;
+      if (o.listings.length > 2) o.listings = o.listings.slice(0, 2);
+      const bad = o.listings.find((l) => !input.found.listings.some((x) => x.id === l.listing_id));
+      if (bad) return `unknown listing id "${bad.listing_id}"`;
+      if (new Set(o.listings.map((l) => l.listing_id)).size !== o.listings.length) return "the same listing twice";
+      // a public event keeps its own day, time and place. the server writes them, not muse.
+      if (ev) {
+        o.when_day = ev.when_day as Matched["when_day"];
+        o.when_time = ev.when_time;
+        o.when_text = ev.when_text;
+      }
       if (!isTime(o.when_time)) return `bad when_time "${o.when_time}"`;
       if (!isFreeAt(input.starter.free_windows, o.when_day, o.when_time)) return `the starter is not free ${o.when_day} ${o.when_time}`;
       return null;
     },
-    summarize: (o) => `${o.activity} · ${o.when_day} ${o.when_time} · picked ${o.picks.map((p) => p.user_id).join(", ")}`,
+    summarize: (o) =>
+      `${o.activity} · ${o.when_day} ${o.when_time} · picked ${o.picks.map((p) => p.user_id).join(", ")}` +
+      ` · found ${input.found.events.length}e/${input.found.groups.length}g/${input.found.listings.length}l, used ${[o.event_id, o.group_id, ...o.listings.map((l) => l.listing_id)].filter(Boolean).join(", ") || "none"}`,
     stream: onText ? { field: "hear_me_out", onText, onRestart } : undefined,
   });
 }

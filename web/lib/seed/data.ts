@@ -332,3 +332,55 @@ export const APP_SETTINGS = [
 
 // demo characters, for the user switcher order
 export const DEMO_ORDER = ["maya", "alex", "jo", "sam"];
+
+// ---------- discovery catalog (all fictional) ----------
+// tags are topic keys from lib/discover.ts. events recur weekly on a day + time.
+
+export const GROUPS = [
+  { id: "atlanta-vintage-finds", name: "atlanta vintage finds", description: "Where the good racks are this week. Finds, tips and the occasional brag.", tags: ["thrifting"], area: "Atlanta", cover: "feed/thrift.jpg", member_count: 2140, activity: ["New rack out front of the shop on 5th today.", "Saturday pop-up has a whole denim wall this week."] },
+  { id: "weekend-thrift-club", name: "weekend thrift club", description: "A small crew that hits two or three secondhand spots most Saturdays.", tags: ["thrifting"], area: "Decatur", cover: "feed/denim.jpg", member_count: 318, activity: ["Route for Saturday: pop-up first, then the swap.", "Found a $6 chore coat. It can be done."] },
+  { id: "campus-photography-walks", name: "campus photography walks", description: "Slow walks with cameras. Film and digital, beginners welcome.", tags: ["photography"], area: "Midtown", cover: "feed/camera.jpg", member_count: 542, activity: ["Sunday walk starts at the reservoir gate.", "Bring one roll and finish it, that is the rule."] },
+  { id: "local-board-game-nights", name: "local board game nights", description: "Heavy games, light games, and someone who explains the rules twice.", tags: ["games"], area: "Atlanta", cover: "feed/boardgame.jpg", member_count: 876, activity: ["Friday table is open at the cafe on 5th.", "Looking for a fourth for a co-op campaign."] },
+  { id: "secondhand-furniture-swaps", name: "secondhand furniture swaps", description: "Give a chair, get a lamp. Room makeovers on almost no money.", tags: ["home"], area: "Atlanta", cover: "market/armchair.jpg", member_count: 1290, activity: ["Before and after: a $40 bedroom.", "Curb alert: bookshelf on the east side."] },
+  { id: "atlanta-running-crew", name: "atlanta running crew", description: "Easy miles, three mornings a week. Nobody gets dropped.", tags: ["running"], area: "Atlanta", cover: "story/track.jpg", member_count: 1675, activity: ["Saturday long run, 8am, coffee after.", "New route through the park is open."] },
+];
+
+export const GROUP_MEMBERS: Array<[group: string, user: string]> = [
+  ["atlanta-vintage-finds", "alex"], ["atlanta-vintage-finds", "jo"], ["weekend-thrift-club", "sam"], ["weekend-thrift-club", "alex"],
+  ["campus-photography-walks", "mina"], ["local-board-game-nights", "ravi"], ["secondhand-furniture-swaps", "noor"], ["atlanta-running-crew", "kai"],
+];
+
+export const PUBLIC_EVENTS = [
+  { id: "vintage-popup", title: "Saturday Vintage Pop-up", description: "Twenty sellers, racks of denim and jackets, and a dollar bin worth digging through.", when_day: "sat", when_time: "13:00", when_text: "saturday at 1", area: "Old Fourth Ward", tags: ["thrifting"], organizer: "Atlanta Vintage Finds", capacity: null, group_id: "atlanta-vintage-finds", cover: "feed/thrift.jpg" },
+  { id: "clothing-swap", title: "Student Clothing Swap", description: "Bring five pieces, leave with five. Whatever is left goes to a shelter.", when_day: "sun", when_time: "13:00", when_text: "sunday at 1", area: "Peachtree State campus", tags: ["thrifting"], organizer: "Weekend Thrift Club", capacity: 60, group_id: "weekend-thrift-club", cover: "feed/denim.jpg" },
+  { id: "record-fair", title: "Weekend Record Fair", description: "Crates from a dozen collectors. Mostly soul, jazz and 45s.", when_day: "sat", when_time: "12:00", when_text: "saturday at noon", area: "Little Five Points", tags: ["music", "thrifting"], organizer: "Spin Cycle Collective", capacity: null, group_id: null, cover: "story/vinyl.jpg" },
+  { id: "photo-walk", title: "Reservoir Photography Walk", description: "An easy loop with plenty of stops. Any camera works, phones included.", when_day: "sun", when_time: "14:00", when_text: "sunday at 2", area: "the reservoir", tags: ["photography", "outdoors"], organizer: "Campus Photography Walks", capacity: 25, group_id: "campus-photography-walks", cover: "feed/lake.jpg" },
+  { id: "board-game-cafe-night", title: "Board Game Cafe Night", description: "Open tables, 200 games, and staff who will teach you anything on the shelf.", when_day: "sat", when_time: "16:00", when_text: "saturday at 4", area: "5th Street", tags: ["games"], organizer: "Local Board Game Nights", capacity: 40, group_id: "local-board-game-nights", cover: "feed/boardgame.jpg" },
+  { id: "makers-market", title: "Local Makers Market", description: "Ceramics, prints, plants and food stalls. Good for wandering with no plan.", when_day: "sat", when_time: "11:00", when_text: "saturday at 11", area: "the old rail yard", tags: ["weekend", "home", "food"], organizer: "Rail Yard Markets", capacity: null, group_id: null, cover: "feed/market.jpg" },
+];
+
+// same ids as the app's marketplace photos (ios/Musing/MockData.swift)
+export const LISTINGS = [
+  { id: "car", title: "1967 roadster, runs great", price: 6500, category: "Vehicles", place: "Decatur, GA", tags: [], seller_id: "dev" },
+  { id: "pc", title: "*NEW BUILD* RGB gaming PC", price: 560, category: "Electronics", place: "Atlanta, GA", tags: [], seller_id: "ravi" },
+  { id: "denim", title: "90s denim jacket, size M", price: 25, category: "Clothing", place: "Decatur, GA", tags: ["thrifting"], seller_id: "alex" },
+  { id: "vase", title: "Vintage art glass vase", price: 40, category: "Home", place: "Atlanta, GA", tags: ["home", "thrifting"], seller_id: "noor" },
+  { id: "mirror", title: "Chrome wall mirror", price: 85, category: "Home", place: "Atlanta, GA", tags: ["home"], seller_id: "lena" },
+  { id: "car2", title: "Silver coupe, low miles", price: 18900, category: "Vehicles", place: "Marietta, GA", tags: [], seller_id: "kai" },
+  { id: "armchair", title: "Velvet armchair, mustard", price: 120, category: "Furniture", place: "Atlanta, GA", tags: ["home"], seller_id: "priya" },
+  { id: "dunks", title: "High tops, size 10", price: 70, category: "Clothing", place: "Atlanta, GA", tags: ["thrifting"], seller_id: "theo" },
+  { id: "sofa", title: "Tufted antique sofa", price: 300, category: "Furniture", place: "Roswell, GA", tags: ["home"], seller_id: "ollie" },
+  { id: "guitar", title: "Acoustic guitar + strap", price: 150, category: "Hobbies", place: "Atlanta, GA", tags: ["music"], seller_id: "theo" },
+  { id: "turntable", title: "Turntable, new needle", price: 95, category: "Electronics", place: "Decatur, GA", tags: ["music"], seller_id: "alex" },
+  { id: "bike", title: "City bike, 54cm", price: 180, category: "Hobbies", place: "Atlanta, GA", tags: ["outdoors"], seller_id: "mina" },
+  { id: "chore", title: "Indigo chore coat", price: 40, category: "Clothing", place: "Atlanta, GA", tags: ["thrifting"], seller_id: "jo" },
+  { id: "laptop", title: "Gaming laptop, 16GB", price: 650, category: "Electronics", place: "Atlanta, GA", tags: [], seller_id: "ravi" },
+  { id: "lamps", title: "Pair of bedside lamps", price: 30, category: "Home", place: "Atlanta, GA", tags: ["home"], seller_id: "lena" },
+  { id: "records", title: "Lot of 45s, 12 records", price: 12, category: "Hobbies", place: "Decatur, GA", tags: ["music"], seller_id: "alex" },
+  { id: "runners", title: "Retro runners, size 9", price: 35, category: "Clothing", place: "Atlanta, GA", tags: ["running", "thrifting"], seller_id: "kai" },
+  { id: "pc2", title: "Tower + keyboard combo", price: 420, category: "Electronics", place: "Atlanta, GA", tags: [], seller_id: "dev" },
+  { id: "chair", title: "Red seat side chair", price: 45, category: "Furniture", place: "Atlanta, GA", tags: ["home"], seller_id: "noor" },
+  { id: "vase2", title: "Red blown glass vase", price: 28, category: "Home", place: "Atlanta, GA", tags: ["home"], seller_id: "mina" },
+  { id: "camera", title: "35mm film camera, tested", price: 110, category: "Electronics", place: "Atlanta, GA", tags: ["photography"], seller_id: "mina" },
+  { id: "boardgames", title: "Stack of 6 board games", price: 45, category: "Hobbies", place: "Atlanta, GA", tags: ["games"], seller_id: "ravi" },
+];

@@ -30,6 +30,8 @@ export type CoordinateInput = {
   asker: { id: string; firstName: string };
   /** said in the open to muse. may be empty when only a private limit was shared */
   counteroffer: string | null;
+  /** the plan is to attend an existing public event, so day, time and place cannot change */
+  fixedEvent?: boolean;
   /** confidential. constraints only. */
   privateLimits: Array<{ firstName: string; text: string }>;
   preferCache?: boolean;
@@ -67,7 +69,7 @@ function userPrompt(i: CoordinateInput): string {
   const limits = i.privateLimits.length > 0 ? i.privateLimits.map((l) => `- ${l.firstName}: "${l.text}"`).join("\n") : "- none";
   return `today is ${i.today}.
 
-the plan right now: ${i.plan.activity} | ${i.plan.when_text} (${i.plan.when_day} ${i.plan.when_time}) | ${i.plan.where_text}
+the plan right now: ${i.plan.activity} | ${i.plan.when_text} (${i.plan.when_day} ${i.plan.when_time}) | ${i.plan.where_text}${i.fixedEvent ? "\nthis plan is to go to an existing public event. its day, time and place are fixed: return them unchanged. you may only adjust what the group does around it (meeting up before, food after). if the request needs a different day or time, set works_for_asker to false and say plainly that the event is at the time it is." : ""}
 starter: ${i.starter.firstName} | free: ${windowsLine(i.starter.free_windows)}
 
 people asked:

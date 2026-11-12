@@ -3,9 +3,13 @@ import {
   APP_SETTINGS,
   EVENTS,
   FRIEND_EDGES,
+  GROUP_MEMBERS,
+  GROUPS,
+  LISTINGS,
   MESSAGES,
   PAST_MUSES,
   POSTS,
+  PUBLIC_EVENTS,
   THREADS,
   USERS,
 } from "./data";
@@ -43,6 +47,12 @@ export async function resetSeed(db: SupabaseClient): Promise<{ users: number; fr
   await insert(db, "events", EVENTS);
   await insert(db, "app_settings", APP_SETTINGS);
 
+  // the discovery catalog has stable ids, so it is upserted rather than wiped
+  await upsert(db, "groups", GROUPS);
+  await upsert(db, "public_events", PUBLIC_EVENTS);
+  await upsert(db, "listings", LISTINGS);
+  await insert(db, "group_members", GROUP_MEMBERS.map(([group_id, user_id]) => ({ group_id, user_id })));
+
   return { users: USERS.length, friendships: friendships.length };
 }
 
@@ -50,4 +60,9 @@ async function insert(db: SupabaseClient, table: string, rows: object[]) {
   if (rows.length === 0) return;
   const { error } = await db.from(table).insert(rows);
   if (error) throw new Error(`insert ${table}: ${error.message}`);
+}
+
+async function upsert(db: SupabaseClient, table: string, rows: object[]) {
+  const { error } = await db.from(table).upsert(rows);
+  if (error) throw new Error(`upsert ${table}: ${error.message}`);
 }
