@@ -1,0 +1,8 @@
+// signing. everyone builds with their own apple id, so nothing personal lives in the project.
+// either pick your team in xcode (target Musing > Signing & Capabilities), or create
+// ios/Local.xcconfig (gitignored) with your own two lines:
+//   DEVELOPMENT_TEAM = ABCDE12345
+//   MUSING_BUNDLE_ID = com.yourname.musing
+DEVELOPMENT_TEAM =
+MUSING_BUNDLE_ID = com.musing.$(USER:rfc1034identifier)
+#include? "Local.xcconfig"

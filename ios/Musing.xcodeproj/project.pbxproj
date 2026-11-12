@@ -42,6 +42,7 @@
 		E81E9D792DB9F1DE268B92EE /* mock */ = {isa = PBXFileReference; lastKnownFileType = folder; name = mock; path = Musing/Resources/mock; sourceTree = SOURCE_ROOT; };
 		EB761A920EFBE3157F38646B /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
 		F0614ADA4DEFC31A507568F8 /* API.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = API.swift; sourceTree = "<group>"; };
+		"TEMP_C2683D3C-9E27-4769-8116-65D0BDA06EB6" /* Signing.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Signing.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -92,6 +93,14 @@
 			path = Resources;
 			sourceTree = "<group>";
 		};
+		"TEMP_D2DCBFCA-14C7-4FD0-B0AF-F1233E66EC55" /* ios */ = {
+			isa = PBXGroup;
+			children = (
+				"TEMP_C2683D3C-9E27-4769-8116-65D0BDA06EB6" /* Signing.xcconfig */,
+			);
+			path = ios;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -124,7 +133,7 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					5C60A2E4FAA6B1C29B2AD4DC = {
-						DevelopmentTeam = FZ44V8RNMH;
+						DevelopmentTeam = "";
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -178,7 +187,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "set -e\nENV_FILE=\"${SRCROOT}/.env\"\n[ -f \"$ENV_FILE\" ] || ENV_FILE=\"${SRCROOT}/env.example\"\nDIR=\"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}\"\nmkdir -p \"$DIR\"\ngrep -v '^#' \"$ENV_FILE\" > \"$DIR/config.env\"\nHOST=$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || true)\necho \"DEV_HOST=${HOST}\" >> \"$DIR/config.env\"\n";
+			shellScript = "set -e\nENV_FILE=\"${SRCROOT}/.env\"\n[ -f \"$ENV_FILE\" ] || ENV_FILE=\"${SRCROOT}/env.example\"\nDIR=\"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}\"\nmkdir -p \"$DIR\"\ngrep -v '^#' \"$ENV_FILE\" > \"$DIR/config.env\"\n# this mac's bonjour name works over wifi and over the usb cable; fall back to the lan ip\nNAME=$(scutil --get LocalHostName 2>/dev/null || true)\nif [ -n \"$NAME\" ]; then HOST=\"${NAME}.local\"; else HOST=$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || true); fi\necho \"DEV_HOST=${HOST}\" >> \"$DIR/config.env\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -208,6 +217,7 @@
 /* Begin XCBuildConfiguration section */
 		75ED0AA4A1E4DD7D3A5E2BAC /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = "TEMP_C2683D3C-9E27-4769-8116-65D0BDA06EB6" /* Signing.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
@@ -220,7 +230,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.oninactive.musing;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(MUSING_BUNDLE_ID)";
 				PRODUCT_NAME = musing;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = 1;
@@ -229,6 +239,7 @@
 		};
 		D6C91F994409A2337C9319EB /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = "TEMP_C2683D3C-9E27-4769-8116-65D0BDA06EB6" /* Signing.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
@@ -241,7 +252,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.oninactive.musing;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(MUSING_BUNDLE_ID)";
 				PRODUCT_NAME = musing;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = 1;
@@ -283,7 +294,6 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				DEVELOPMENT_TEAM = FZ44V8RNMH;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
@@ -341,7 +351,6 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = dwarf;
-				DEVELOPMENT_TEAM = FZ44V8RNMH;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;

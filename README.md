@@ -19,7 +19,20 @@ open ios/Musing.xcodeproj           # pick a simulator or your phone, press run
 
 the app is a plain xcode project written in swift. it has no package dependencies, so there is nothing to install. the project file is generated from `ios/project.yml`; after adding or removing a swift file run `cd ios && xcodegen generate` (`brew install xcodegen`).
 
-on a physical phone, localhost is the phone. the build writes this mac's lan ip into the app, so the phone reaches the laptop as long as both are on the same wifi. if it picks the wrong address, set it in the app under Menu > Server address.
+on a physical phone, localhost is the phone. the build writes this mac's bonjour name (`your-mac.local`) into the app, so the phone reaches the laptop over the usb cable or over home wifi. campus and guest wifi usually block phone-to-laptop traffic, so keep the cable plugged in there. if it picks the wrong address, set it in the app under Menu > Server address.
+
+## running it on your own mac and phone (teammates)
+
+you need xcode 16 or newer, docker desktop, the supabase cli (`brew install supabase/tap/supabase`), node 20+ and pnpm. the phone needs ios 17 or newer.
+
+1. **server.** from the repo root run `supabase start`. then `cd web && pnpm install && cp env.example .env.local` and fill it in: the two supabase keys come from `supabase status`, the muse key comes from abrar (never commit it). run `pnpm seed` once, then `pnpm dev`.
+2. **signing.** open `ios/Musing.xcodeproj`, click the Musing target > Signing & Capabilities, and pick your own team (add your apple id under Xcode > Settings > Accounts first; a free one works). the bundle id is already unique to you (`com.musing.<your mac username>`). if xcode still says the bundle id is taken, create `ios/Local.xcconfig` as described in `ios/Signing.xcconfig`. do not commit the team change xcode makes to the project file.
+3. **phone.** plug it in, unlock it and tap Trust. turn on Settings > Privacy & Security > Developer Mode (the phone restarts). pick the phone at the top of xcode and press run.
+4. **first launch.** ios blocks the app until you trust yourself: Settings > General > VPN & Device Management > your apple id > Trust. open the app and allow "find devices on local networks" when it asks; without that it cannot reach your mac.
+
+with a free apple id the app stops opening after 7 days. press run in xcode again to renew it.
+
+each person runs their own server and their own copy of the demo data. two phones only see the same plans when they both talk to the same mac.
 
 If you add a route folder under `web/app/api` while `pnpm dev` is running and it 404s, restart `pnpm dev`. The file watcher misses new folders when the machine is under load.
 
