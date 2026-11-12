@@ -202,16 +202,28 @@ export async function generateImage(opts: ImageOpts): Promise<ImageResult> {
     if (parsed?.success) return { ...parsed.data, source: "cache", latencyMs: 0 };
   }
 
-  const t0 = Date.now();
+  let t0 = Date.now();
   try {
-    const res = await muse().images.generate({
-      model: MUSE_IMAGE_MODEL,
-      prompt: opts.prompt,
-      n: 1,
-      size: opts.size ?? "1024x1024",
-      response_format: "b64_json",
-      output_format: "png",
-    });
+    const call = () =>
+      muse().images.generate({
+        model: MUSE_IMAGE_MODEL,
+        prompt: opts.prompt,
+        n: 1,
+        size: opts.size ?? "1024x1024",
+        response_format: "b64_json",
+        output_format: "png",
+      });
+    let res: Awaited<ReturnType<typeof call>>;
+    try {
+      res = await call();
+    } catch (e) {
+      // a connection that never opened cost nothing, so it gets one more try.
+      // anything slower may have reached the api, and an image is the priciest call.
+      if (!neverConnected(e, Date.now() - t0)) throw e;
+      await trace({ job: opts.job, model: MUSE_IMAGE_MODEL, latencyMs: Date.now() - t0, ok: false, summary: "image: connection didn't open, trying once more", planId: opts.planId ?? null });
+      t0 = Date.now();
+      res = await call();
+    }
     const latencyMs = Date.now() - t0;
     const b64 = res.data?.[0]?.b64_json;
     if (!b64) throw new Error("no image in response");
@@ -226,6 +238,13 @@ export async function generateImage(opts: ImageOpts): Promise<ImageResult> {
     if (parsed?.success) return { ...parsed.data, source: "cache", latencyMs: 0 };
     throw e;
   }
+}
+
+// true when the request died before a connection was established (dns, tcp or tls,
+// undici gives up on those after 10s). the api never saw it.
+function neverConnected(e: unknown, elapsedMs: number): boolean {
+  const name = e instanceof Error ? e.constructor.name : "";
+  return elapsedMs < 15_000 && (name === "APIConnectionError" || name === "APIConnectionTimeoutError");
 }
 
 // ---------- trace + cache ----------

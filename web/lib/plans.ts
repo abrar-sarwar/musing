@@ -212,7 +212,8 @@ export async function respond(planId: string, userId: string, status: Extract<Me
   const b = await loadBundle(planId);
   if (!b) throw new PlanError("plan not found", 404);
   const mine = b.members.find((m) => m.user_id === userId);
-  if (!mine) throw new PlanError("plan not found", 404);
+  // a draft doesn't exist as far as anyone but the starter is concerned
+  if (!mine || b.plan.state === "draft") throw new PlanError("plan not found", 404);
   if (b.plan.state !== "proposing" && b.plan.state !== "happening") throw new PlanError("this plan isn't open", 409);
 
   const now = new Date().toISOString();
