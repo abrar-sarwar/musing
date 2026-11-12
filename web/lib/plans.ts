@@ -23,9 +23,9 @@ export class PlanError extends Error {
 const lower = (s: string) => s.toLowerCase();
 const person = (u: User): Person => ({ id: u.id, name: u.name, avatar_seed: u.avatar_seed });
 
-type Bundle = { plan: Plan; members: PlanMember[]; rawText: string | null; users: Map<string, User> };
+export type Bundle = { plan: Plan; members: PlanMember[]; rawText: string | null; users: Map<string, User> };
 
-async function loadBundle(planId: string): Promise<Bundle | null> {
+export async function loadBundle(planId: string): Promise<Bundle | null> {
   const db = serverDb();
   const { data: plan, error } = await db.from("plans").select("*").eq("id", planId).maybeSingle();
   if (error) throw new Error(`plan: ${error.message}`);
@@ -269,6 +269,7 @@ async function syncThreadMembers(planId: string, threadId: string, starterId: st
   const { data: members } = await db.from("plan_members").select("user_id,status").eq("plan_id", planId);
   const ids = [starterId, ...(members ?? []).filter((m) => m.status === "down").map((m) => m.user_id as string)];
   await db.from("threads").update({ member_ids: ids }).eq("id", threadId);
+  await db.from("thread_pings").upsert({ thread_id: threadId, at: new Date().toISOString() });
 }
 
 // ---------- quorum: the plan becomes real ----------
@@ -281,6 +282,18 @@ export async function makeItReal(planId: string): Promise<void> {
   if (!b || b.plan.state !== "happening" || b.plan.thread_id) return;
   const { plan, members, users } = b;
   if (!plan.muse_on) return; // poll mode stops at the count
+
+  // claim the work. only one caller gets through, and a claim that died is free again
+  // after a minute, so a failed attempt can be retried without ever making two chats.
+  const stale = new Date(Date.now() - 60_000).toISOString();
+  const { data: claimed } = await db
+    .from("plans")
+    .update({ making_at: new Date().toISOString() })
+    .eq("id", planId)
+    .is("thread_id", null)
+    .or(`making_at.is.null,making_at.lt.${stale}`)
+    .select("id");
+  if (!claimed || claimed.length === 0) return;
 
   const settings = await getSettings();
   const going = [plan.starter_id, ...members.filter((m) => m.status === "down").map((m) => m.user_id)];
@@ -298,6 +311,7 @@ export async function makeItReal(planId: string): Promise<void> {
       where_text: plan.where_text ?? "somewhere easy",
       dateLine,
       goingFirstNames: going.map((id) => lower(firstName(users.get(id)?.name ?? id))),
+      found: (await planOpportunities(planId)).map((o) => `${o.kind}: ${o.title}`),
       preferCache: settings.muse_replay,
     });
     made = r.data;
@@ -315,7 +329,7 @@ export async function makeItReal(planId: string): Promise<void> {
   // the public event, group and listings this plan uses ride along on the card. the
   // private event made below is this group's plan to go, not a second public event.
   const found = (await planOpportunities(planId)).map((o) => ({ kind: o.kind, id: o.id, title: o.title, sub: o.sub }));
-  const { data: thread, error: e1 } = await db.from("threads").insert({ title: lower(made.thread_title), member_ids: going }).select("id").single();
+  const { data: thread, error: e1 } = await db.from("threads").insert({ title: lower(made.thread_title), member_ids: going, plan_id: planId }).select("id").single();
   if (e1 || !thread) throw new Error(`thread insert: ${e1?.message}`);
   const { data: event, error: e2 } = await db
     .from("events")
@@ -326,10 +340,12 @@ export async function makeItReal(planId: string): Promise<void> {
   await db.from("messages").insert({
     thread_id: thread.id,
     sender_id: null,
+    kind: "muse",
     body: lower(made.announce),
     card: { type: "plan", plan_id: planId, event_id: event.id, title: plan.activity, when: plan.when_text, where: plan.where_text, line: lower(made.announce), found },
   });
-  await db.from("plans").update({ thread_id: thread.id, event_id: event.id, updated_at: new Date().toISOString() }).eq("id", planId);
+  await db.from("plans").update({ thread_id: thread.id, event_id: event.id, making_at: null, updated_at: new Date().toISOString() }).eq("id", planId);
+  await db.from("thread_pings").upsert({ thread_id: thread.id, at: new Date().toISOString() });
 
   if (settings.posters_on && made.poster_prompt) {
     void makePoster(planId, event.id as string, made.poster_prompt, settings.muse_replay).catch((e) => console.error("poster failed:", e));

@@ -13,7 +13,7 @@ export async function requireUser(): Promise<User> {
 }
 
 export function fail(e: unknown): Response {
-  const status = e instanceof PlanError ? e.status : 500;
+  const status = e instanceof PlanError ? e.status : typeof (e as { status?: unknown })?.status === "number" ? (e as { status: number }).status : 500;
   const message = e instanceof Error ? e.message : String(e);
   if (status >= 500) console.error(e);
   return Response.json({ ok: false, error: message }, { status });
