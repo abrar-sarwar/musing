@@ -89,7 +89,7 @@ export function coordinate(input: CoordinateInput, onText?: (delta: string) => v
     system: SYSTEM,
     user: userPrompt(input),
     maxTokens: 2000,
-    reasoning: "low", // this one has real constraints to juggle
+    // minimal keeps the re-solve near the 5 second target; the leak check below is the net
     planId: input.planId,
     preferCache: input.preferCache,
     check: (o) => {
