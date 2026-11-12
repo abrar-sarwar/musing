@@ -33,7 +33,7 @@ export type StructuredOpts<S extends z.ZodType> = {
   /** serve the cache without calling muse when present (smoke tests, muse off). */
   preferCache?: boolean;
   /** stream this string field's text to onText as it is generated */
-  stream?: { field: string; onText: (delta: string) => void };
+  stream?: { field: string; onText: (delta: string) => void; onRestart?: () => void };
 };
 
 export type StructuredResult<T> = {
@@ -57,7 +57,9 @@ export async function runStructured<S extends z.ZodType>(opts: StructuredOpts<S>
   if (opts.preferCache) {
     const hit = await cacheGet(cacheKey);
     const parsed = hit ? opts.schema.safeParse(hit) : null;
-    if (parsed?.success) {
+    // a cached answer still has to pass this request's checks (ids, leaks)
+    if (parsed?.success && !opts.check?.(parsed.data)) {
+      await trace({ job: opts.job, model: "cache", latencyMs: 0, ok: true, summary: `replayed: ${opts.summarize?.(parsed.data) ?? "ok"}`, planId: opts.planId ?? null });
       if (opts.stream) opts.stream.onText(String((parsed.data as Record<string, unknown>)[opts.stream.field] ?? ""));
       return { data: parsed.data, source: "cache", latencyMs: 0, attempts: 0 };
     }
@@ -109,13 +111,14 @@ export async function runStructured<S extends z.ZodType>(opts: StructuredOpts<S>
         summary: `attempt ${attempt} failed: ${msg.slice(0, 160)}`,
         planId: opts.planId ?? null,
       });
+      opts.stream?.onRestart?.();
     }
   }
 
   // both attempts failed. last good response for this slot keeps the demo alive.
   const hit = await cacheGet(cacheKey);
   const parsed = hit ? opts.schema.safeParse(hit) : null;
-  if (parsed?.success) {
+  if (parsed?.success && !opts.check?.(parsed.data)) {
     if (opts.stream) opts.stream.onText(String((parsed.data as Record<string, unknown>)[opts.stream.field] ?? ""));
     return { data: parsed.data, source: "cache", latencyMs: 0, attempts: 2 };
   }
@@ -239,7 +242,7 @@ async function trace(t: { job: JobName; model: string; latencyMs: number; ok: bo
   if (error) console.error("muse_trace insert failed:", error.message);
 }
 
-async function cacheGet(key: string): Promise<unknown | null> {
+export async function cacheGet(key: string): Promise<unknown | null> {
   const { data, error } = await serverDb().from("muse_cache").select("output").eq("job", key).maybeSingle();
   if (error) {
     console.error("muse_cache read failed:", error.message);
@@ -248,7 +251,7 @@ async function cacheGet(key: string): Promise<unknown | null> {
   return data?.output ?? null;
 }
 
-async function cachePut(key: string, output: unknown) {
+export async function cachePut(key: string, output: unknown) {
   const { error } = await serverDb().from("muse_cache").upsert({ job: key, output, updated_at: new Date().toISOString() });
   if (error) console.error("muse_cache write failed:", error.message);
 }

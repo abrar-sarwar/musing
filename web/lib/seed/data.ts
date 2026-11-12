@@ -324,7 +324,11 @@ export const EVENTS = [
   },
 ];
 
-export const APP_SETTINGS = [{ key: "muse_on", value: true }];
+export const APP_SETTINGS = [
+  { key: "muse_on", value: true },
+  { key: "muse_replay", value: false },
+  { key: "posters_on", value: true },
+];
 
 // demo characters, for the user switcher order
 export const DEMO_ORDER = ["maya", "alex", "jo", "sam"];
