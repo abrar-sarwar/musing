@@ -1,5 +1,4 @@
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from "react-native";
@@ -10,7 +9,7 @@ import { WhatIf } from "@/components/musing/WhatIf";
 import { SubScreen } from "@/components/shell/SubScreen";
 import { Avatar } from "@/components/ui/Avatar";
 import { Card } from "@/components/ui/Card";
-import { fb, muse, museGradient } from "@/constants/theme";
+import { fb, muse } from "@/constants/theme";
 import { useActingUser } from "@/lib/acting-user";
 import { apiDelete, apiGet, apiPost } from "@/lib/api";
 import { usePrefs } from "@/lib/prefs";
@@ -71,24 +70,24 @@ export default function PlanScreen() {
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }} keyboardVerticalOffset={60}>
         <ScrollView contentContainerStyle={{ paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
           {/* the plan itself */}
-          <LinearGradient colors={[...museGradient]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.hero}>
+          <View style={styles.hero}>
             <Text style={styles.kicker}>
               {p.state === "draft" ? "draft · only you can see this" : p.state === "happening" ? COPY.happening : p.state === "faded" ? "didn't land" : starter ? "out with your people" : `from ${firstName(p.starter.name).toLowerCase()}, via muse`}
             </Text>
             <Text style={styles.activity}>{p.activity}</Text>
             {p.when && (
               <View style={styles.heroRow}>
-                <Ionicons name="time-outline" size={16} color="#fff" />
+                <Ionicons name="time-outline" size={16} color={fb.muted} />
                 <Text style={styles.heroMeta}>{p.when}</Text>
               </View>
             )}
             {p.where && (
               <View style={styles.heroRow}>
-                <Ionicons name="location-outline" size={16} color="#fff" />
+                <Ionicons name="location-outline" size={16} color={fb.muted} />
                 <Text style={styles.heroMeta}>{p.where}</Text>
               </View>
             )}
-          </LinearGradient>
+          </View>
 
           {p.solving && (
             <View style={styles.solving}>
@@ -235,11 +234,11 @@ function PersonChip({ user }: { user: Person }) {
 
 const styles = StyleSheet.create({
   empty: { padding: 24, color: fb.muted, textAlign: "center" },
-  hero: { margin: 12, borderRadius: 18, padding: 18, gap: 6 },
-  kicker: { color: "rgba(255,255,255,0.85)", fontSize: 12, fontWeight: "700" },
-  activity: { color: "#fff", fontSize: 28, fontWeight: "800", letterSpacing: -0.5, marginBottom: 4 },
+  hero: { margin: 12, borderRadius: 16, padding: 16, gap: 5, backgroundColor: muse.softer, borderWidth: 1, borderColor: muse.line },
+  kicker: { color: muse.text, fontSize: 12.5, fontWeight: "700" },
+  activity: { color: fb.text, fontSize: 26, fontWeight: "800", letterSpacing: -0.5, marginBottom: 2 },
   heroRow: { flexDirection: "row", alignItems: "center", gap: 6 },
-  heroMeta: { color: "#fff", fontSize: 16, flex: 1 },
+  heroMeta: { color: fb.text, fontSize: 16, flex: 1 },
   solving: { flexDirection: "row", alignItems: "center", gap: 8, marginHorizontal: 12, marginBottom: 8, backgroundColor: muse.soft, borderRadius: 12, padding: 10 },
   solvingText: { color: muse.text, fontWeight: "600", fontSize: 14 },
   block: { marginHorizontal: 12, borderRadius: 16, padding: 14, gap: 12 },

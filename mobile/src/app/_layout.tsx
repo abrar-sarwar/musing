@@ -4,6 +4,8 @@ import { StatusBar } from "expo-status-bar";
 import { UserSwitcherSheet } from "@/components/shell/UserSwitcherSheet";
 import { ActingUserProvider, useActingUser } from "@/lib/acting-user";
 import { PrefsProvider } from "@/lib/prefs";
+import { ToastProvider } from "@/lib/toast";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 
 // demo affordance: any link with ?as=<userId> switches the acting user first,
 // so a qr code or deep link can open a second phone straight into a friend's view.
@@ -20,10 +22,14 @@ export default function RootLayout() {
   return (
     <ActingUserProvider>
       <PrefsProvider>
-        <ActAsFromLink />
-        <StatusBar style="dark" />
-        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: "#fff" } }} />
-        <UserSwitcherSheet />
+        <SafeAreaProvider>
+          <ToastProvider>
+            <ActAsFromLink />
+            <StatusBar style="auto" />
+            <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: "#fff" } }} />
+            <UserSwitcherSheet />
+          </ToastProvider>
+        </SafeAreaProvider>
       </PrefsProvider>
     </ActingUserProvider>
   );

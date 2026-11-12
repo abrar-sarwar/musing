@@ -1,6 +1,6 @@
 import { FlatList, StyleSheet, Text, View } from "react-native";
 import { EventCard, type EventRow } from "@/components/events/EventCard";
-import { Screen } from "@/components/shell/Screen";
+import { SubScreen } from "@/components/shell/SubScreen";
 import { fb } from "@/constants/theme";
 import { supabase } from "@/lib/supabase";
 import { useQuery } from "@/lib/use-query";
@@ -14,7 +14,7 @@ export default function EventsScreen() {
   });
   useTableChanges("events", () => void events.reload());
   return (
-    <Screen>
+    <SubScreen title="Events">
       <FlatList
         data={events.data ?? []}
         keyExtractor={(e) => e.id}
@@ -26,7 +26,7 @@ export default function EventsScreen() {
         onRefresh={events.reload}
         contentContainerStyle={{ paddingBottom: 16 }}
       />
-    </Screen>
+    </SubScreen>
   );
 }
 
