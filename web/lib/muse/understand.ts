@@ -33,9 +33,10 @@ export type UnderstandInput = {
   text: string;
   starterName: string;
   today: string; // "thursday, november 12"
+  preferCache?: boolean;
 };
 
-export function understand(input: UnderstandInput, onText?: (delta: string) => void): Promise<StructuredResult<Understood>> {
+export function understand(input: UnderstandInput, onText?: (delta: string) => void, onRestart?: () => void): Promise<StructuredResult<Understood>> {
   return runStructured({
     job: "understand",
     schema: UnderstandSchema,
@@ -43,6 +44,7 @@ export function understand(input: UnderstandInput, onText?: (delta: string) => v
     system: SYSTEM,
     user: `today is ${input.today}. ${input.starterName} typed: "${input.text}"`,
     summarize: (o) => `activity=${o.activity} · time=${o.time_hint} · vibe=${o.vibe}`,
-    stream: onText ? { field: "reply", onText } : undefined,
+    preferCache: input.preferCache,
+    stream: onText ? { field: "reply", onText, onRestart } : undefined,
   });
 }
