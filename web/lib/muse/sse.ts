@@ -1,4 +1,4 @@
-// server-sent events response for route handlers. the app reads it with expo/fetch.
+// server-sent events response for route handlers. the swift app reads it with URLSession.
 export type Send = (event: string, data: unknown) => void;
 
 export function sseResponse(handler: (send: Send) => Promise<void>): Response {
