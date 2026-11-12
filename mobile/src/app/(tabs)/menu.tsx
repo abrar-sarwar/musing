@@ -1,12 +1,13 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
 import { Screen } from "@/components/shell/Screen";
 import { Avatar } from "@/components/ui/Avatar";
 import { Card } from "@/components/ui/Card";
 import { fb } from "@/constants/theme";
 import { useActingUser } from "@/lib/acting-user";
+import { usePrefs } from "@/lib/prefs";
 
 type IconName = React.ComponentProps<typeof Ionicons>["name"];
 
@@ -22,6 +23,7 @@ const SHORTCUTS: Array<{ icon: IconName; label: string; color: string }> = [
 export default function MenuScreen() {
   const { me, openSwitcher, resetDemo } = useActingUser();
   const router = useRouter();
+  const { settings, setSetting } = usePrefs();
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -62,6 +64,11 @@ export default function MenuScreen() {
           ))}
         </View>
 
+        <Text style={styles.section}>musing.</Text>
+        <Card>
+          <Row icon="sparkles" label="musing. settings" onPress={() => router.push("/musing/settings")} last />
+        </Card>
+
         <Text style={styles.section}>Prototype</Text>
         <Card>
           <Row icon="swap-horizontal" label="Switch user" onPress={openSwitcher} />
@@ -69,6 +76,12 @@ export default function MenuScreen() {
           <Row icon="refresh" label={busy ? "Resetting…" : "Reset demo data"} onPress={busy ? undefined : onReset} last />
         </Card>
         {msg && <Text style={styles.msg}>{msg}</Text>}
+
+        <Text style={styles.section}>Stage safety</Text>
+        <Card>
+          <SwitchRow label="Replay cached Muse" sub="Serve the last good Muse responses instead of calling the API. For when the network dies mid-demo." value={settings.muse_replay} onChange={(v) => void setSetting("muse_replay", v)} />
+          <SwitchRow label="Invite posters" sub="Generate a Muse Image poster when a plan becomes real. Takes about 45 seconds and is the priciest call." value={settings.posters_on} onChange={(v) => void setSetting("posters_on", v)} last />
+        </Card>
         <Text style={styles.footer}>hackathon prototype · mock data · no real accounts · no real facebook api</Text>
       </ScrollView>
     </Screen>
@@ -87,6 +100,18 @@ function Row({ icon, label, onPress, last = false }: { icon: IconName; label: st
   );
 }
 
+function SwitchRow({ label, sub, value, onChange, last = false }: { label: string; sub: string; value: boolean; onChange: (v: boolean) => void; last?: boolean }) {
+  return (
+    <View style={[styles.row, !last && styles.rowBorder]}>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.rowLabel}>{label}</Text>
+        <Text style={styles.sub}>{sub}</Text>
+      </View>
+      <Switch value={value} onValueChange={onChange} accessibilityLabel={label} />
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   heading: { fontSize: 24, fontWeight: "700", color: fb.text },
   profile: { flexDirection: "row", alignItems: "center", gap: 12, padding: 12, borderRadius: 10 },
@@ -99,7 +124,7 @@ const styles = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 12, paddingVertical: 12 },
   rowBorder: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: fb.divider },
   rowIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: fb.input, alignItems: "center", justifyContent: "center" },
-  rowLabel: { flex: 1, fontSize: 16, fontWeight: "500", color: fb.text },
+  rowLabel: { flexGrow: 1, flexShrink: 1, fontSize: 16, fontWeight: "500", color: fb.text },
   msg: { color: fb.muted, fontSize: 13, paddingHorizontal: 4 },
   footer: { color: fb.muted, fontSize: 12, textAlign: "center", marginTop: 8 },
 });
