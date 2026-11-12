@@ -169,16 +169,62 @@ struct PlanCard: Decodable {
     let `where`: String?
     let line: String?
     let found: [Found]?
+    // a "finds" card lists catalog records. a "proposal" card points at a group vote.
+    let items: [Found]?
+    let proposalId: String?
+    let summary: String?
     struct Found: Decodable, Hashable { let kind: String; let id: String; let title: String; let sub: String }
 }
 
-struct Message: Decodable, Identifiable {
+struct Message: Decodable, Identifiable, Equatable {
     let id: String
-    let threadId: String
     let senderId: String? // nil = muse
+    let kind: String // text | muse
     let body: String?
     let card: PlanCard?
+    let clientId: String?
+    let pending: Bool // muse is still writing
     let createdAt: String
+    static func == (a: Message, b: Message) -> Bool { a.id == b.id && a.body == b.body && a.pending == b.pending }
+}
+
+struct ThreadSummary: Decodable, Identifiable {
+    let id: String
+    let title: String
+    let memberIds: [String]
+    let hasMuse: Bool
+    let last: Message?
+}
+struct ThreadList: Decodable { let threads: [ThreadSummary] }
+
+// a change to a confirmed plan. it happens only when everyone going agrees.
+struct Proposal: Decodable, Identifiable {
+    let id: String
+    let summary: String
+    let status: String // open | accepted | declined | expired
+    let yes: Int
+    let needed: Int
+    let myVote: String?
+    let canVote: Bool
+}
+
+struct ThreadDetail: Decodable {
+    struct Info: Decodable {
+        let id: String
+        let title: String
+        let planId: String?
+        let members: [Person]
+        let hasMuse: Bool // plan chats only. muse is a capability here, not an account
+        let museMuted: Bool
+    }
+    let thread: Info
+    let messages: [Message]
+    let proposals: [Proposal]
+}
+
+struct SendResult: Decodable {
+    let message: Message
+    let wantsMuse: Bool
 }
 
 struct EventRow: Decodable, Identifiable {

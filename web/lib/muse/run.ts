@@ -30,6 +30,8 @@ export type StructuredOpts<S extends z.ZodType> = {
   check?: (out: z.infer<S>) => string | null;
   /** cache slot. defaults to job. */
   cacheKey?: string;
+  /** never store or replay this answer. for replies that only make sense in their own moment (chat). */
+  noCache?: boolean;
   /** serve the cache without calling muse when present (smoke tests, muse off). */
   preferCache?: boolean;
   /** stream this string field's text to onText as it is generated */
@@ -101,7 +103,7 @@ export async function runStructured<S extends z.ZodType>(opts: StructuredOpts<S>
         planId: opts.planId ?? null,
         usage,
       });
-      await cachePut(cacheKey, parsed.data);
+      if (!opts.noCache) await cachePut(cacheKey, parsed.data);
       return { data: parsed.data, source: "live", latencyMs, attempts: attempt };
     } catch (e) {
       lastErr = e;
@@ -120,7 +122,7 @@ export async function runStructured<S extends z.ZodType>(opts: StructuredOpts<S>
   }
 
   // both attempts failed. last good response for this slot keeps the demo alive.
-  const hit = await cacheGet(cacheKey);
+  const hit = opts.noCache ? null : await cacheGet(cacheKey);
   const parsed = hit ? opts.schema.safeParse(hit) : null;
   if (parsed?.success && !opts.check?.(parsed.data)) {
     if (opts.stream) opts.stream.onText(String((parsed.data as Record<string, unknown>)[opts.stream.field] ?? ""));

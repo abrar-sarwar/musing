@@ -14,6 +14,7 @@
 		41D69F0EAB55E70DC97B02FF /* MusingApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91A02AEA219B126BBB6A7BE3 /* MusingApp.swift */; };
 		4C0C7008FD1DC231767DF8D9 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03D86AEA4EFA2E35E76B79F4 /* Models.swift */; };
 		538E3A28B28CE7D90832E57E /* MusingScreens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1044FCEE089D4A38F99108DD /* MusingScreens.swift */; };
+		60EEA2BBDD4F62344CF3D3C6 /* ChatScreens.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBB047C7D1E0507BE278AD1F /* ChatScreens.swift */; };
 		718F26A396187AD21440C2FC /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB761A920EFBE3157F38646B /* Components.swift */; };
 		90EB7557E2234D0BFC016E2F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 486FAEBE1D661DBCF5510D00 /* Assets.xcassets */; };
 		99C3DF4C971DD9053DF1926F /* API.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0614ADA4DEFC31A507568F8 /* API.swift */; };
@@ -37,12 +38,13 @@
 		8B4A18496BC1DF6401775555 /* TabScreens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabScreens.swift; sourceTree = "<group>"; };
 		91A02AEA219B126BBB6A7BE3 /* MusingApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusingApp.swift; sourceTree = "<group>"; };
 		A40C90A31D82C11B53AAE921 /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
+		CBB047C7D1E0507BE278AD1F /* ChatScreens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatScreens.swift; sourceTree = "<group>"; };
 		CE750F1B4A67E4D90E053821 /* DiscoverScreens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverScreens.swift; sourceTree = "<group>"; };
 		D3BEE59E49112D7667017ED2 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		E81E9D792DB9F1DE268B92EE /* mock */ = {isa = PBXFileReference; lastKnownFileType = folder; name = mock; path = Musing/Resources/mock; sourceTree = SOURCE_ROOT; };
 		EB761A920EFBE3157F38646B /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
 		F0614ADA4DEFC31A507568F8 /* API.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = API.swift; sourceTree = "<group>"; };
-		"TEMP_C2683D3C-9E27-4769-8116-65D0BDA06EB6" /* Signing.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Signing.xcconfig; sourceTree = "<group>"; };
+		"TEMP_FC9B202A-BA3E-4335-8201-3BEC85A1A86B" /* Signing.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Signing.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -52,6 +54,7 @@
 				F0614ADA4DEFC31A507568F8 /* API.swift */,
 				A40C90A31D82C11B53AAE921 /* AppState.swift */,
 				486FAEBE1D661DBCF5510D00 /* Assets.xcassets */,
+				CBB047C7D1E0507BE278AD1F /* ChatScreens.swift */,
 				EB761A920EFBE3157F38646B /* Components.swift */,
 				CE750F1B4A67E4D90E053821 /* DiscoverScreens.swift */,
 				8313505AAD8B203FF396618B /* HomeScreen.swift */,
@@ -93,10 +96,10 @@
 			path = Resources;
 			sourceTree = "<group>";
 		};
-		"TEMP_D2DCBFCA-14C7-4FD0-B0AF-F1233E66EC55" /* ios */ = {
+		"TEMP_4A95AB27-8243-44A9-A204-D21D904C3BAA" /* ios */ = {
 			isa = PBXGroup;
 			children = (
-				"TEMP_C2683D3C-9E27-4769-8116-65D0BDA06EB6" /* Signing.xcconfig */,
+				"TEMP_FC9B202A-BA3E-4335-8201-3BEC85A1A86B" /* Signing.xcconfig */,
 			);
 			path = ios;
 			sourceTree = "<group>";
@@ -198,6 +201,7 @@
 			files = (
 				99C3DF4C971DD9053DF1926F /* API.swift in Sources */,
 				F0AD17268F08EE813A6FDF23 /* AppState.swift in Sources */,
+				60EEA2BBDD4F62344CF3D3C6 /* ChatScreens.swift in Sources */,
 				718F26A396187AD21440C2FC /* Components.swift in Sources */,
 				23975D3341C79F772DF85567 /* DiscoverScreens.swift in Sources */,
 				411E27A1D66A9666B92AE4B6 /* HomeScreen.swift in Sources */,
@@ -217,7 +221,7 @@
 /* Begin XCBuildConfiguration section */
 		75ED0AA4A1E4DD7D3A5E2BAC /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = "TEMP_C2683D3C-9E27-4769-8116-65D0BDA06EB6" /* Signing.xcconfig */;
+			baseConfigurationReference = "TEMP_FC9B202A-BA3E-4335-8201-3BEC85A1A86B" /* Signing.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
@@ -239,7 +243,7 @@
 		};
 		D6C91F994409A2337C9319EB /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = "TEMP_C2683D3C-9E27-4769-8116-65D0BDA06EB6" /* Signing.xcconfig */;
+			baseConfigurationReference = "TEMP_FC9B202A-BA3E-4335-8201-3BEC85A1A86B" /* Signing.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";

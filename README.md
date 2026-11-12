@@ -62,6 +62,18 @@ five thoughts to try as maya: "lowkey wanna go thrifting saturday" (event + grou
 
 on a deployed server, `POST /api/reset` and `POST /api/settings` need an `x-admin-token` header matching `ADMIN_TOKEN`. a local dev server stays open.
 
+## muse in the group chat
+
+when a plan reaches quorum its group chat is a real chat: members send messages, everyone sees them live, and a failed send can be retried without doubling it. in a chat made for a plan, muse is available as an ai co-planner. it is a capability of the chat, not a member or an account.
+
+- muse answers only when someone writes `@muse` or taps a muse action. `recap the plan` and `show our finds` read the database and make no model call. it can be muted per chat, and the chat works the same with muse muted, off or failing.
+- `web/lib/chat.ts` is the chat: membership checks, sends, muse replies and votes. `web/lib/muse/chat.ts` is the muse job. it sees the shared plan, what the plan uses, a catalog search for the question, the last few messages and when everyone going is free. it never sees private limits, private asks, counteroffers or who passed.
+- muse cannot change a confirmed plan. it can put one change to a vote, and the plan moves only when every person going agrees. one "no" ends it. one vote can be open per plan.
+- a plan built on a public event cannot move day. muse says so and offers a different event or a normal outing instead.
+- one muse reply per message even if two phones ask at once, six replies a minute per chat, and a 45 second limit after which muse bows out.
+- chats are closed to the anonymous database role. the app reads and writes them through `/api/threads`, and listens to `thread_pings`, which says a chat changed and nothing else.
+- on a deployed server the `x-musing-user` header is not believed. set `DEMO_SECRET` and `DEMO_PASSCODE` on the server and `DEMO_PASSCODE` in `ios/.env`; the app trades the passcode for a signed token. this keeps strangers out of a demo. it is not real login.
+
 ## where the privacy rules live
 
 - `web/lib/plans.ts` shapes every plan per viewer (`buildView`). the app never reads `plan_members` directly; migration `0002` removes anon access to it and to `muses`.

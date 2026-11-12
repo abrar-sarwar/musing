@@ -58,6 +58,7 @@ how to answer:
 - use first names only when it is natural, and only for people who are going.
 - no real business names. for food or anything not in the lists, name a kind of place ("a noodle spot near the pop-up").
 - cards: when they ask to see events, groups or listings, or you mention one, list those records (at most 4) so they show as cards. ids only from the lists. otherwise an empty list.
+- "our finds", "the finds" or "what we found" means what the plan already uses: show exactly those. show other records only when they ask for more or for something else.
 
 changing the plan:
 - you never change the plan. the group does. you can put one change up for a vote.
@@ -95,7 +96,7 @@ groups you may show:
 ${list(i.found.groups.map((g) => `- ${g.id} | ${g.name} | ${g.area} | ${g.description}`))}
 
 marketplace listings you may show:
-${list(i.found.listings.map((l) => `- ${l.id} | ${l.title} | $${l.price} | ${l.place}`))}
+${list(i.found.listings.map((l) => `- ${l.id} | ${l.title} | $${l.price} | ${l.place}${i.uses.some((u) => u.kind === "listing" && u.id === l.id) ? " | already in the plan" : ""}`))}
 
 the chat so far:
 ${list(i.recent.map((m) => `${m.who}: ${m.text}`))}
@@ -114,8 +115,8 @@ export function chat(input: ChatInput, onText?: (delta: string) => void, onResta
     user: publicBefore,
     maxTokens: 1600,
     planId: input.planId,
-    // a chat answer is about this exact moment. never replayed from another one.
-    cacheKey: `chat_${input.planId}`,
+    // a chat answer is about this exact moment. an old one must never stand in for it.
+    noCache: true,
     check: (o) => {
       if (o.reply.trim().length === 0) return "empty reply";
       if (o.cards.length > 4) o.cards = o.cards.slice(0, 4);

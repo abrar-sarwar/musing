@@ -33,6 +33,8 @@ enum Config {
     static var apiURL: String { resolve(values["API_URL"] ?? "http://localhost:3000") }
     static var supabaseURL: String { resolve(values["SUPABASE_URL"] ?? "http://localhost:56321") }
     static var supabaseKey: String { values["SUPABASE_ANON_KEY"] ?? "" }
+    /// only needed against a deployed server
+    static var demoPasscode: String { values["DEMO_PASSCODE"] ?? "" }
 }
 
 struct ApiError: LocalizedError {
@@ -56,6 +58,8 @@ enum API {
         var req = URLRequest(url: URL(string: Config.apiURL + path)!)
         req.httpMethod = method
         req.setValue(user, forHTTPHeaderField: "x-musing-user")
+        // a deployed server does not believe the header above. it wants the signed demo token.
+        if let token = tokens[user] { req.setValue(token, forHTTPHeaderField: "x-musing-token") }
         if let body {
             req.setValue("application/json", forHTTPHeaderField: "content-type")
             req.httpBody = try? JSONSerialization.data(withJSONObject: body)
@@ -69,8 +73,22 @@ enum API {
         return ApiError(message: text.isEmpty || text.count > 200 ? "http \(status)" : text)
     }
 
+    private static var tokens: [String: String] = [:]
+
+    /// on a deployed server, trade the demo passcode for a signed token for this person. local servers skip this.
+    static func signIn(_ user: String) async {
+        guard !Config.demoPasscode.isEmpty, tokens[user] == nil else { return }
+        var req = URLRequest(url: URL(string: Config.apiURL + "/api/session")!)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "content-type")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: ["userId": user, "passcode": Config.demoPasscode])
+        guard let (data, _) = try? await URLSession.shared.data(for: req), let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any], let token = obj["token"] as? String else { return }
+        tokens[user] = token
+    }
+
     @discardableResult
     static func data(_ method: String, _ path: String, user: String, body: [String: Any]? = nil) async throws -> Data {
+        await signIn(user)
         let (data, resp) = try await URLSession.shared.data(for: request(method, path, user: user, body: body))
         let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
         guard (200..<300).contains(status) else { throw failure(data, status) }
@@ -93,6 +111,7 @@ enum API {
     // server-sent events. the server writes "event: x\ndata: <one line of json>\n\n",
     // so each data line completes an event. calls onEvent until the stream closes.
     static func stream(_ path: String, user: String, body: [String: Any], onEvent: @MainActor (String, [String: Any]) -> Void) async throws {
+        await signIn(user)
         var req = request("POST", path, user: user, body: body)
         req.setValue("text/event-stream", forHTTPHeaderField: "accept")
         req.timeoutInterval = 180
@@ -143,7 +162,8 @@ extension Notification.Name {
 // decides what this person may see.
 final class Realtime {
     static let shared = Realtime()
-    private static let tables = ["plans", "events", "messages", "muse_trace", "app_settings"]
+    private static let tables = ["plans", "events", "thread_pings", "muse_trace", "app_settings"]
+    private var everConnected = false
     private var task: URLSessionWebSocketTask?
     private var ref = 0
 
@@ -164,6 +184,11 @@ final class Realtime {
         send(t, topic: "realtime:musing-app", event: "phx_join", payload: ["config": ["broadcast": ["self": false], "presence": ["key": ""], "postgres_changes": changes]])
         receive(t)
         heartbeat(t)
+        // back after a drop: whatever changed while offline was missed, so every screen refetches
+        if everConnected {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { Self.tables.forEach { NotificationCenter.default.post(name: .tableChanged, object: $0) } }
+        }
+        everConnected = true
     }
 
     private func send(_ t: URLSessionWebSocketTask, topic: String, event: String, payload: [String: Any]) {

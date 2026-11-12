@@ -194,7 +194,9 @@ export async function museReply(threadId: string, userId: string, ask: MuseAsk, 
     ]);
     const nameOf = (id: string | null) => (id ? lower(firstName(b.users.get(id)?.name ?? "someone")) : "muse");
 
-    const r = await chat(
+    // a slow model never holds the chat. past this, muse bows out and the placeholder is removed.
+    const giveUp = new Promise<never>((_, reject) => setTimeout(() => reject(new PlanError("muse took too long. the chat still works, ask again in a bit.", 504)), 45_000));
+    const r = await Promise.race([giveUp, chat(
       {
         planId: b.plan.id,
         today: todayLine(),
@@ -214,7 +216,7 @@ export async function museReply(threadId: string, userId: string, ask: MuseAsk, 
       },
       onText,
       onRestart,
-    );
+    )]);
     const o = r.data;
 
     // cards come from the catalog rows the server looked up, never from model text
@@ -334,7 +336,12 @@ async function applyProposal(p: { id: string; plan_id: string; thread_id: string
   await db.from("plan_opportunities").delete().eq("plan_id", p.plan_id).eq("kind", "event");
   if (ch.public_event_id) await db.from("plan_opportunities").insert({ plan_id: p.plan_id, kind: "event", ref_id: ch.public_event_id, reason: "the group switched to this" });
   if (plan.event_id && isDay(ch.when_day) && isTime(ch.when_time)) {
-    await db.from("events").update({ starts_at: nextOccurrence(ch.when_day, ch.when_time).toISOString(), location: ch.where_text }).eq("id", plan.event_id);
+    const startsAt = nextOccurrence(ch.when_day, ch.when_time);
+    // a title like "Saturday Thrift Run" follows the plan to its new day
+    const { data: ev } = await db.from("events").select("title").eq("id", plan.event_id).maybeSingle();
+    const newDay = startsAt.toLocaleDateString("en-US", { weekday: "long" });
+    const title = String(ev?.title ?? "").replace(/\b(Sunday|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday)\b/g, newDay);
+    await db.from("events").update({ starts_at: startsAt.toISOString(), location: ch.where_text, ...(title ? { title } : {}) }).eq("id", plan.event_id);
   }
   const uses = await planOpportunities(p.plan_id);
   await insertMuse(p.thread_id, { body: `everyone's in. it's now ${ch.when_text}, ${ch.where_text}.`, card: planCard(plan, uses) });
