@@ -1,0 +1,62 @@
+@import "tailwindcss";
+
+/* facebook-ish shell tokens + the musing accent */
+@theme {
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+
+  --color-fb-bg: #f0f2f5;
+  --color-fb-card: #ffffff;
+  --color-fb-blue: #0866ff;
+  --color-fb-blue-dark: #0a5ce6;
+  --color-fb-blue-soft: #e7f0ff;
+  --color-fb-text: #050505;
+  --color-fb-muted: #65676b;
+  --color-fb-divider: #ced0d4;
+  --color-fb-hover: #f2f2f2;
+  --color-fb-input: #f0f2f5;
+  --color-fb-green: #31a24c;
+  --color-fb-red: #f3425f;
+  --color-fb-yellow: #f7b928;
+
+  --color-muse-start: #7c3aed;
+  --color-muse-end: #ec4899;
+  --color-muse-soft: #f5efff;
+
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-pop: 0 12px 28px rgba(0, 0, 0, 0.2), 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: var(--color-fb-bg);
+  color: var(--color-fb-text);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* musing accent helpers */
+@utility bg-muse {
+  background-image: linear-gradient(135deg, var(--color-muse-start), var(--color-muse-end));
+}
+
+@utility text-muse {
+  background-image: linear-gradient(135deg, var(--color-muse-start), var(--color-muse-end));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+@utility border-muse {
+  border-image: linear-gradient(135deg, var(--color-muse-start), var(--color-muse-end)) 1;
+}
+
+/* hide scrollbars on the side rails, keep them scrollable */
+@utility scrollbar-none {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
