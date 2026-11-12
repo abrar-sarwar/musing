@@ -87,6 +87,8 @@ enum Mock {
         Listing(id: "pc2", title: "Tower + keyboard combo", price: 420, category: "Electronics", seller: "dev", place: "Atlanta, GA", about: "Good starter setup."),
         Listing(id: "chair", title: "Red seat side chair", price: 45, category: "Furniture", seller: "noor", place: "Atlanta, GA", about: "Solid wood. One small scuff."),
         Listing(id: "vase2", title: "Red blown glass vase", price: 28, category: "Home", seller: "mina", place: "Atlanta, GA", about: "Catches the light."),
+        Listing(id: "camera", title: "35mm film camera, tested", price: 110, category: "Electronics", seller: "mina", place: "Atlanta, GA", about: "Light meter works. Comes with a strap and one roll."),
+        Listing(id: "boardgames", title: "Stack of 6 board games", price: 45, nearby: true, category: "Hobbies", seller: "ravi", place: "Atlanta, GA", about: "All pieces counted. Two are still in shrink wrap."),
     ]
     static let marketTabs = ["Sell", "Explore", "Local", "Jobs", "Services", "More"]
     struct Gig: Identifiable { let id: String; let title: String; let who: String; let pay: String }

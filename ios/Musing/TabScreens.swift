@@ -153,11 +153,10 @@ struct OverlapCard: View {
         HStack(spacing: 10) {
             Circle().fill(Muse.soft).frame(width: 30, height: 30).overlay(Image(systemName: "sparkles").font(.system(size: 13, weight: .bold)).foregroundStyle(Muse.text))
             VStack(alignment: .leading, spacing: 2) {
-                Text("wait... \(overlap.count) of your friends are into \(overlap.topic) too").font(.system(size: 14.5, weight: .semibold)).foregroundStyle(Color(hex: 0x1c1e21))
+                Text("wait... some of your friends are into \(overlap.topic) too").font(.system(size: 14.5, weight: .semibold)).foregroundStyle(Color(hex: 0x1c1e21))
                 Button {
-                    app.handoff = "\(overlap.topic) with whoever's into it"
                     onDismiss()
-                    app.push(.musing(compose: false))
+                    app.makeAMove("\(overlap.topic) with whoever's into it", from: SignalContext(kind: "reel", id: overlap.topic, title: "a reel about \(overlap.topic)"))
                 } label: { Text("make a move").font(.system(size: 14.5, weight: .bold)).foregroundStyle(Muse.text) }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -268,7 +267,6 @@ struct ListingTile: View {
 struct ListingScreen: View {
     @EnvironmentObject var app: AppState
     let listingId: String
-    @State private var saved = false
     private let columns = [GridItem(.flexible(), spacing: 4), GridItem(.flexible(), spacing: 4)]
 
     var body: some View {
@@ -285,10 +283,13 @@ struct ListingScreen: View {
                             Text("Listed in \(item.place) · \(item.category)").font(.system(size: 14)).foregroundStyle(FB.muted)
                             HStack(spacing: 8) {
                                 pill("message.fill", "Message", primary: true) { toast("Message sent to the seller. Mock only.") }
-                                pill(saved ? "bookmark.fill" : "bookmark", saved ? "Saved" : "Save") { saved.toggle() }
+                                pill(app.isSaved("listing", item.id) ? "bookmark.fill" : "bookmark", app.isSaved("listing", item.id) ? "Saved" : "Save") { app.setSaved("listing", item.id, !app.isSaved("listing", item.id)) }
                                 pill("arrowshape.turn.up.right", "Share") { toast("Sharing is mocked in this prototype.") }
                             }
                             .padding(.vertical, 10)
+                            MoveFromThis(sub: "muse can turn this into a plan with friends. nothing is bought or held.") {
+                                app.makeAMove("something with friends around this \(item.title.lowercased())", from: SignalContext(kind: "listing", id: item.id, title: item.title))
+                            }
                             heading("Description")
                             Text(item.about).font(.system(size: 16)).lineSpacing(3).foregroundStyle(FB.text)
                             heading("Seller information")

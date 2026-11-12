@@ -476,8 +476,7 @@ struct MusingFeedUnit: View {
                         Text("\(overlap.count) of your friends are into \(overlap.topic) lately").font(.system(size: 18, weight: .bold)).foregroundStyle(FB.text)
                         Text("want muse to make it a thing? nobody finds out who.").font(.system(size: 15)).foregroundStyle(FB.muted)
                         Button {
-                            app.handoff = "\(overlap.topic) with whoever's into it"
-                            app.push(.musing(compose: true))
+                            app.makeAMove("\(overlap.topic) with whoever's into it", from: SignalContext(kind: "reel", id: overlap.topic, title: "what your friends are into"))
                         } label: {
                             Text("make a move").font(.system(size: 15, weight: .bold)).foregroundStyle(Muse.text)
                                 .frame(maxWidth: .infinity).frame(height: 38).background(Muse.soft, in: RoundedRectangle(cornerRadius: 8))

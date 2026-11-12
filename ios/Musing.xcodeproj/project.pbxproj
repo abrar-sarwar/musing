@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		23975D3341C79F772DF85567 /* DiscoverScreens.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE750F1B4A67E4D90E053821 /* DiscoverScreens.swift */; };
 		24FF0AB0FADA07BC46517F7F /* MockData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46CFF1AAB126FDC7E7661239 /* MockData.swift */; };
 		3487ECCB2501C26D2F2197C6 /* TabScreens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B4A18496BC1DF6401775555 /* TabScreens.swift */; };
 		411E27A1D66A9666B92AE4B6 /* HomeScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8313505AAD8B203FF396618B /* HomeScreen.swift */; };
@@ -36,6 +37,7 @@
 		8B4A18496BC1DF6401775555 /* TabScreens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabScreens.swift; sourceTree = "<group>"; };
 		91A02AEA219B126BBB6A7BE3 /* MusingApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusingApp.swift; sourceTree = "<group>"; };
 		A40C90A31D82C11B53AAE921 /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
+		CE750F1B4A67E4D90E053821 /* DiscoverScreens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverScreens.swift; sourceTree = "<group>"; };
 		D3BEE59E49112D7667017ED2 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		E81E9D792DB9F1DE268B92EE /* mock */ = {isa = PBXFileReference; lastKnownFileType = folder; name = mock; path = Musing/Resources/mock; sourceTree = SOURCE_ROOT; };
 		EB761A920EFBE3157F38646B /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
@@ -50,6 +52,7 @@
 				A40C90A31D82C11B53AAE921 /* AppState.swift */,
 				486FAEBE1D661DBCF5510D00 /* Assets.xcassets */,
 				EB761A920EFBE3157F38646B /* Components.swift */,
+				CE750F1B4A67E4D90E053821 /* DiscoverScreens.swift */,
 				8313505AAD8B203FF396618B /* HomeScreen.swift */,
 				5604F50B9594968202DDCDFE /* Info.plist */,
 				81597564723C367725B24983 /* MessagesEvents.swift */,
@@ -187,6 +190,7 @@
 				99C3DF4C971DD9053DF1926F /* API.swift in Sources */,
 				F0AD17268F08EE813A6FDF23 /* AppState.swift in Sources */,
 				718F26A396187AD21440C2FC /* Components.swift in Sources */,
+				23975D3341C79F772DF85567 /* DiscoverScreens.swift in Sources */,
 				411E27A1D66A9666B92AE4B6 /* HomeScreen.swift in Sources */,
 				B8DFFFD5D5C461A7FF331B1C /* MessagesEvents.swift in Sources */,
 				24FF0AB0FADA07BC46517F7F /* MockData.swift in Sources */,

@@ -105,3 +105,8 @@ func compactCount(_ n: Int) -> String {
     guard n >= 1000 else { return String(n) }
     return n >= 10000 ? "\(Int((Double(n) / 1000).rounded()))K" : String(format: "%.1fK", Double(n) / 1000)
 }
+
+/// "saturday at 1" -> "Saturday at 1"
+func sentenceCase(_ s: String) -> String {
+    s.prefix(1).uppercased() + s.dropFirst()
+}

@@ -36,6 +36,9 @@ struct RootView: View {
                     case .musingSettings: MusingSettingsScreen()
                     case .nudge: NudgePreview()
                     case .recap: RecapPreview()
+                    case .groups: GroupsScreen()
+                    case .group(let id): GroupDetailScreen(groupId: id)
+                    case .publicEvent(let id): PublicEventScreen(eventId: id)
                     }
                 }
         }
@@ -48,7 +51,10 @@ struct RootView: View {
             if let target = UserDefaults.standard.string(forKey: "open"), let url = URL(string: "musing://\(target)") { open(url) }
             await app.loadUsers()
         }
-        .task(id: app.version) { await app.loadSettings() }
+        .task(id: app.version) {
+            await app.loadSettings()
+            await app.loadCatalog()
+        }
         .onChange(of: app.version) { Task { await app.loadUsers() } }
         .onTableChange("app_settings") { Task { await app.loadSettings() } }
         .onOpenURL { open($0) }
@@ -71,6 +77,8 @@ struct RootView: View {
         case "people": if let arg { app.path = [.person(arg)] }
         case "plan": if let arg { app.path = [.musing(compose: false), .plan(arg)] }
         case "settings": app.path = [.musingSettings]
+        case "groups": app.path = arg.map { [.groups, .group($0)] } ?? [.groups]
+        case "public-event": if let arg { app.path = [.events, .publicEvent(arg)] }
         default: break
         }
     }

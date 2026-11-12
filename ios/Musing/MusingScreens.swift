@@ -148,6 +148,8 @@ struct SignalComposer: View {
     @State private var error: String?
     @State private var work: Task<Void, Never>?
     @State private var pickerOpen = false
+    @State private var context: SignalContext?
+    @State private var foundLine: String?
     @FocusState private var focused: Bool
 
     private var busy: Bool { phase == .reading || phase == .mixing }
@@ -157,6 +159,14 @@ struct SignalComposer: View {
     var body: some View {
         let museOn = app.settings.museOn
         VStack(alignment: .leading, spacing: 10) {
+            if let context {
+                HStack(spacing: 6) {
+                    Image(systemName: context.kind == "listing" ? "storefront" : context.kind == "event" ? "calendar" : context.kind == "group" ? "person.3" : "play.rectangle").font(.system(size: 12))
+                    Text("starting from \(context.title)").font(.system(size: 13, weight: .semibold)).lineLimit(1)
+                    Button { self.context = nil } label: { Image(systemName: "xmark").font(.system(size: 10, weight: .bold)) }.accessibilityLabel("remove")
+                }
+                .foregroundStyle(Muse.text).padding(.horizontal, 10).padding(.vertical, 6).background(Muse.soft, in: Capsule())
+            }
             TextField(Copy.composerPlaceholder, text: $text, axis: .vertical)
                 .font(.system(size: 19)).foregroundStyle(FB.text).lineLimit(2...6)
                 .textInputAutocapitalization(.never).disabled(busy).focused($focused)
@@ -201,7 +211,10 @@ struct SignalComposer: View {
                         }
                         .padding(.leading, 40)
                     }
-                    if phase == .mixing { MuseBubble(text: pitch, thinking: true, label: Copy.pitchLead) }
+                    if phase == .mixing {
+                        if let foundLine { Text(foundLine).font(.system(size: 12)).foregroundStyle(FB.muted).padding(.leading, 40) }
+                        MuseBubble(text: pitch, thinking: true, label: Copy.pitchLead)
+                    }
                 }
                 .padding(.top, 4)
             }
@@ -228,7 +241,9 @@ struct SignalComposer: View {
     private func takeHandoff() {
         guard let h = app.handoff, phase == .idle else { return }
         text = h
+        context = app.handoffContext
         app.handoff = nil
+        app.handoffContext = nil
     }
 
     private func reset() {
@@ -240,6 +255,8 @@ struct SignalComposer: View {
         understood = nil
         replayed = false
         error = nil
+        context = nil
+        foundLine = nil
         phase = .idle
     }
 
@@ -256,6 +273,11 @@ struct SignalComposer: View {
         var streamError: String?
         try await API.stream("/api/muse/match", user: app.userId, body: ["museId": museId]) { event, data in
             switch event {
+            case "found":
+                // what the server searched before muse started choosing
+                let n = { (k: String) in data[k] as? Int ?? 0 }
+                let parts = [n("events") > 0 ? "\(n("events")) events" : nil, n("groups") > 0 ? "\(n("groups")) groups" : nil, n("listings") > 0 ? "\(n("listings")) listings" : nil].compactMap { $0 }
+                foundLine = parts.isEmpty ? nil : "looking through \(parts.joined(separator: ", ")) and your friends' free time"
             case "delta": pitch += data["text"] as? String ?? ""
             case "restart": pitch = ""
             case "done": planId = data["planId"] as? String
@@ -279,6 +301,8 @@ struct SignalComposer: View {
         work?.cancel()
         let thought = trimmed
         let user = app.userId
+        var body: [String: Any] = ["text": thought]
+        if let context { body["context"] = ["kind": context.kind, "id": context.id] }
         work = Task {
             do {
                 if !app.settings.museOn {
@@ -292,7 +316,7 @@ struct SignalComposer: View {
                 phase = .reading
                 var done: [String: Any]?
                 var streamError: String?
-                try await API.stream("/api/muse/understand", user: user, body: ["text": thought]) { event, data in
+                try await API.stream("/api/muse/understand", user: user, body: body) { event, data in
                     switch event {
                     case "delta": reply += data["text"] as? String ?? ""
                     case "restart": reply = ""
@@ -670,6 +694,12 @@ struct PlanScreen: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading).padding(14)
         .background(Color.white, in: RoundedRectangle(cornerRadius: 16)).padding(.horizontal, 12)
+
+        // what muse found around this plan. catalog records only, every one tappable.
+        if let found = p.opportunities, !found.isEmpty, p.state != "faded" {
+            SectionLabel("muse found a move")
+            FoundSection(found: found)
+        }
 
         // the mix: starter only
         if starter, let picks = p.picks, p.state != "happening", p.state != "faded" {

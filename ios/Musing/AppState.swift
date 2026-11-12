@@ -7,6 +7,7 @@ enum AppTab: String, CaseIterable {
 enum Route: Hashable {
     case search, menu, messages, thread(String), events, event(String), listing(String), person(String)
     case musing(compose: Bool), plan(String), musingSettings, nudge, recap
+    case groups, group(String), publicEvent(String)
 }
 
 // tiny toast for mocked facebook actions, so nothing on screen is a dead button.
@@ -48,6 +49,11 @@ final class AppState: ObservableObject {
     @Published var traceOn: Bool { didSet { UserDefaults.standard.set(traceOn, forKey: Self.traceKey) } }
     /// a thought handed to the composer from elsewhere (reels card, recap, suggestion)
     @Published var handoff: String?
+    /// the listing, event, group or reel that thought started from, so nothing is typed twice
+    @Published var handoffContext: SignalContext?
+    // the fictional discovery catalog, and what this person saved or joined
+    @Published var catalog: Catalog?
+    @Published var saved: Set<String> = []
     @Published var path: [Route] = []
     @Published var tab: AppTab = .home
     private var pendingActAs: String?
@@ -101,6 +107,37 @@ final class AppState: ObservableObject {
     func resetDemo() async throws {
         try await API.data("POST", "/api/reset", user: userId)
         version += 1
+    }
+
+    // ---- discovery ----
+    func loadCatalog() async {
+        let user = userId
+        guard let c: Catalog = try? await API.get("/api/discover", user: user), user == userId else { return }
+        catalog = c
+        saved = Set(c.saved)
+    }
+
+    func isSaved(_ kind: String, _ id: String) -> Bool { saved.contains("\(kind):\(id)") }
+
+    /// save or join through a mock interaction. only ever for the acting person.
+    func setSaved(_ kind: String, _ id: String, _ on: Bool) {
+        let key = "\(kind):\(id)"
+        if on { saved.insert(key) } else { saved.remove(key) }
+        let user = userId
+        Task {
+            let body: [String: Any] = ["kind": kind, "id": id, "on": on]
+            if (try? await API.data("POST", "/api/discover/save", user: user, body: body)) == nil, user == userId {
+                if on { saved.remove(key) } else { saved.insert(key) }
+                toast("Couldn't save that. Try again.")
+            }
+        }
+    }
+
+    /// every contextual entry point lands here: one thought, one context, the same composer.
+    func makeAMove(_ thought: String, from context: SignalContext?) {
+        handoff = thought
+        handoffContext = context
+        push(.musing(compose: true))
     }
 
     // ---- demo controls ----

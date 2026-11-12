@@ -428,7 +428,7 @@ struct MenuScreen: View {
                     title("Your shortcuts")
                     LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
                         tile("person.2.fill", "Friends", FB.blue) { app.push(.search) }
-                        tile("person.3.fill", "Groups", FB.blue) { toast("Groups are mocked in this prototype.") }
+                        tile("person.3.fill", "Groups", FB.blue) { app.push(.groups) }
                         tile("calendar", "Events", FB.red) { app.push(.events) }
                         tile("clock", "Memories", FB.blue) { app.go(.profile) }
                         tile("bookmark.fill", "Saved", Color(hex: 0xa033ff)) { toast("Nothing saved yet. Save a reel or a listing.") }

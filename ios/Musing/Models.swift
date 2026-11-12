@@ -83,6 +83,53 @@ struct PlanView: Decodable, Identifiable {
     let me: Me?
     let threadId: String?
     let eventId: String?
+    // what muse found for this plan: at most one public event, one group, two listings
+    let opportunities: [Opportunity]?
+}
+
+// a catalog record a plan uses. fictional mock data, never anyone's private activity.
+struct Opportunity: Decodable, Identifiable, Hashable {
+    let kind: String // event | group | listing
+    let id: String
+    let title: String
+    let sub: String
+    let reason: String?
+    let cover: String?
+}
+
+struct PublicEvent: Decodable, Identifiable {
+    let id: String
+    let title: String
+    let description: String
+    let whenText: String
+    let area: String
+    let organizer: String
+    let capacity: Int?
+    let groupId: String?
+    let cover: String?
+}
+
+struct GroupRow: Decodable, Identifiable {
+    let id: String
+    let name: String
+    let description: String
+    let area: String
+    let cover: String?
+    let memberCount: Int
+    let activity: [String]
+}
+
+struct Catalog: Decodable {
+    let events: [PublicEvent]
+    let groups: [GroupRow]
+    let saved: [String] // "kind:id" for this person only
+}
+
+/// where a thought started when it didn't start in the composer
+struct SignalContext: Equatable {
+    let kind: String // listing | event | group | reel
+    let id: String
+    let title: String
 }
 
 struct Settings: Decodable {
@@ -121,6 +168,8 @@ struct PlanCard: Decodable {
     let when: String?
     let `where`: String?
     let line: String?
+    let found: [Found]?
+    struct Found: Decodable, Hashable { let kind: String; let id: String; let title: String; let sub: String }
 }
 
 struct Message: Decodable, Identifiable {

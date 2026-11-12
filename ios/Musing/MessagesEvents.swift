@@ -141,6 +141,16 @@ struct PlanMessageCard: View {
                 Text(card.title ?? "").font(.system(size: 16, weight: .bold)).foregroundStyle(FB.text)
                 Text([card.when, card.`where`].compactMap { $0 }.joined(separator: " · ")).font(.system(size: 13)).foregroundStyle(FB.muted)
                 if let line = card.line { Text(line).font(.system(size: 14)).foregroundStyle(FB.text).padding(.top, 4) }
+                // the public event, group and listings the plan uses
+                ForEach(card.found ?? [], id: \.self) { f in
+                    Button { app.push(f.kind == "event" ? .publicEvent(f.id) : f.kind == "group" ? .group(f.id) : .listing(f.id)) } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: f.kind == "event" ? "calendar" : f.kind == "group" ? "person.3.fill" : "storefront.fill").font(.system(size: 11)).foregroundStyle(FB.blue).frame(width: 16)
+                            Text(f.title).font(.system(size: 13, weight: .semibold)).foregroundStyle(FB.blue).lineLimit(1)
+                        }
+                    }
+                    .buttonStyle(FadePress())
+                }
                 if let event = card.eventId {
                     Button { app.push(.event(event)) } label: {
                         HStack(spacing: 6) {
@@ -180,7 +190,16 @@ struct EventsScreen: View {
         SubScreen(title: "Events") {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 8) {
-                    Text("Upcoming").font(.system(size: 20, weight: .bold)).foregroundStyle(FB.text).padding(.horizontal, 12).padding(.top, 12).padding(.bottom, 4)
+                    if let found = app.catalog?.events, !found.isEmpty {
+                        Text("Discover").font(.system(size: 20, weight: .bold)).foregroundStyle(FB.text).padding(.horizontal, 12).padding(.top, 12).padding(.bottom, 4)
+                        ForEach(found) { ev in
+                            Button { app.push(.publicEvent(ev.id)) } label: {
+                                DiscoverRow(cover: ev.cover, title: ev.title, sub: "\(sentenceCase(ev.whenText)) · \(ev.area)", detail: "By \(ev.organizer) · mock event")
+                            }
+                            .buttonStyle(FadePress())
+                        }
+                    }
+                    Text("Your events").font(.system(size: 20, weight: .bold)).foregroundStyle(FB.text).padding(.horizontal, 12).padding(.top, 12).padding(.bottom, 4)
                     ForEach(events) { ev in
                         let date = parseDate(ev.startsAt)
                         Button { app.push(.event(ev.id)) } label: {

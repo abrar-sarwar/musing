@@ -33,6 +33,20 @@ If you add a route folder under `web/app/api` while `pnpm dev` is running and it
 6. **it's happening (create).** at quorum (2 friends, so 3 people) names appear, and muse makes the group chat, the plan card and the event. the invite poster follows in the background.
 7. **it fades.** if quorum becomes impossible the plan ends quietly. nobody is told who passed.
 
+## opportunity discovery
+
+muse plans with more than friends. before the mix, the server searches a fictional catalog (public events, groups, marketplace listings) and hands muse the few records that fit the thought and the starter's free time. muse builds one plan from them and may use at most one event, one group and two listings, or none.
+
+- `web/lib/discover.ts` is the search (`searchMockEvents`, `searchMockGroups`, `searchMockMarketplace`, `getRelatedOpportunities`). it runs in a few milliseconds and makes no muse call.
+- `web/lib/muse/match.ts` rejects any event, group or listing id the search did not return. a plan built on a public event takes its day, time and place from the catalog, and a later "what if" cannot move it.
+- the public event stays in `public_events`. the plan's own private event is still made in `events` at quorum, and the chat card links back to the public one.
+- a thought can start from a listing, a public event, a group or a reel ("make a move from this"). the app sends that context with the thought, so nothing is typed twice.
+- saving and joining are mock interactions for the acting person only. nothing is bought, reserved or sent to a seller, and nobody is joined to a group by muse.
+
+five thoughts to try as maya: "lowkey wanna go thrifting saturday" (event + group + listings), "i wanna do a room makeover" (listings + group), "make a move" on the photography reel or the camera listing (event + listing), "game night this weekend" (group + listing), "need something to do this weekend" (event).
+
+on a deployed server, `POST /api/reset` and `POST /api/settings` need an `x-admin-token` header matching `ADMIN_TOKEN`. a local dev server stays open.
+
 ## where the privacy rules live
 
 - `web/lib/plans.ts` shapes every plan per viewer (`buildView`). the app never reads `plan_members` directly; migration `0002` removes anon access to it and to `muses`.
