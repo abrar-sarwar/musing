@@ -23,6 +23,8 @@ on a physical phone, localhost is the phone. the build writes this mac's bonjour
 
 ## running it on your own mac and phone (teammates)
 
+the short way: clone, run `./setup.sh` from the repo root, then `cd web && pnpm dev` and press run in xcode. the script finds your own apple team, writes your signing and env files, starts the database and seeds it. it asks once for the muse key and never overwrites a file you already have. the steps below are what it does, for when something goes wrong.
+
 you need xcode 16 or newer, docker desktop, the supabase cli (`brew install supabase/tap/supabase`), node 20+ and pnpm. the phone needs ios 17 or newer.
 
 1. **server.** from the repo root run `supabase start`. then `cd web && pnpm install && cp env.example .env.local` and fill it in: the two supabase keys come from `supabase status`, the muse key comes from abrar (never commit it). run `pnpm seed` once, then `pnpm dev`.
