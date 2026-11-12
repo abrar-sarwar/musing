@@ -25,7 +25,7 @@ export async function POST(req: Request) {
     return sseResponse(async (send) => {
       send("muse", { museId: muse.id });
       const r = await understand(
-        { text, starterName: firstName(user.name).toLowerCase(), today: todayLine(), preferCache: settings.muse_replay },
+        { text, starterName: firstName(user.name).toLowerCase(), interests: user.interests, today: todayLine(), preferCache: settings.muse_replay },
         (delta) => send("delta", { text: delta }),
         () => send("restart", {}),
       );

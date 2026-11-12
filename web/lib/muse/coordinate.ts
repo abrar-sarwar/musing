@@ -41,6 +41,7 @@ ${VOICE}
 
 how to re-solve:
 - make the smallest change that honors the request and every confidential limit.
+- keep it the same kind of plan. a dinner stays a meal, a thrift run stays a thrift run. change the place, the time or the format, never what the plan is about.
 - keep the people who already said yes if you can. check everyone's free windows. the starter must be free at the new time.
 - if the request cannot work for the group, keep the plan as close as possible and set works_for_asker to false.
 - if nothing needs to change, set changed to false and keep every field as it was.

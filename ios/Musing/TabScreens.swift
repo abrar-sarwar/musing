@@ -1,0 +1,602 @@
+import SwiftUI
+
+// ---------- reels ----------
+
+struct Reel: Identifiable, Hashable {
+    let id: String
+    let topic: String
+    let user: User
+    let caption: String
+    let headline: String
+    let poster: String
+}
+
+struct ReelsScreen: View {
+    @EnvironmentObject var app: AppState
+    @State private var rows: [ReelRow] = []
+    @State private var overlap: Overlap?
+    @State private var status = "Loading…"
+    @State private var current: String?
+    @State private var liked: Set<String> = []
+    @State private var saved: Set<String> = []
+    @State private var dismissed = false
+
+    private var reels: [Reel] {
+        // one reel per topic so every reel has its own media; other people's reels only
+        var seen = Set<String>()
+        var out: [Reel] = []
+        for r in rows where r.userId != app.userId && !seen.contains(r.topic) {
+            seen.insert(r.topic)
+            let d = Mock.describeReel(r.topic)
+            out.append(Reel(id: "\(r.userId):\(r.topic)", topic: r.topic, user: r.user, caption: d.caption, headline: d.headline, poster: reelPoster(r.topic)))
+        }
+        // lead with something neutral so the overlap reel is discovered, not the first thing shown
+        if let t = overlap?.topic, let i = out.firstIndex(where: { $0.topic == t }), i != 1, out.count > 2 {
+            out.insert(out.remove(at: i), at: 1)
+        }
+        return Array(out.prefix(14))
+    }
+
+    var body: some View {
+        let list = reels
+        ZStack(alignment: .top) {
+            Color.black.ignoresSafeArea()
+            if list.isEmpty {
+                Text(status).foregroundStyle(Color(hex: 0xaaaaaa)).padding(.top, 220)
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        ForEach(list) { reel in
+                            page(reel, isCurrent: (current ?? list.first?.id) == reel.id)
+                                .containerRelativeFrame([.horizontal, .vertical])
+                                .id(reel.id)
+                        }
+                    }
+                    .scrollTargetLayout()
+                }
+                .scrollTargetBehavior(.paging)
+                .scrollPosition(id: $current)
+                .scrollIndicators(.hidden)
+                .ignoresSafeArea()
+            }
+            FbHeader(title: "Reels", actions: [.more, .search, .messenger], dark: true)
+        }
+        .task(id: app.version) { await load() }
+    }
+
+    private func load() async {
+        rows = []
+        overlap = nil
+        dismissed = false
+        status = "Loading…"
+        do {
+            // the count comes from sql on the server: opted-in friends only, null below 3.
+            async let o: OverlapResponse? = try? API.get("/api/overlap", user: app.userId)
+            let r: [ReelRow] = try await Supa.select("reels_topics", "select=*,user:users!reels_topics_user_id_fkey(*)&order=score.desc&limit=40")
+            let ov = await o
+            guard !Task.isCancelled else { return }
+            rows = r
+            overlap = ov?.overlap
+            status = "No reels yet."
+        } catch let e {
+            guard !Task.isCancelled else { return }
+            status = errorText(e)
+        }
+    }
+
+    private func page(_ item: Reel, isCurrent: Bool) -> some View {
+        let likes = 900 + stableHash(item.id) % 140000
+        return ZStack {
+            Pic(path: item.poster)
+            LinearGradient(stops: [.init(color: .black.opacity(0.75), location: 0), .init(color: .black.opacity(0.05), location: 0.3), .init(color: .black.opacity(0.9), location: 1)], startPoint: .top, endPoint: .bottom)
+            VStack(spacing: 0) {
+                Text(item.headline).font(.system(size: 19, weight: .semibold)).italic().foregroundStyle(.white).multilineTextAlignment(.center)
+                    .shadow(color: .black.opacity(0.6), radius: 6).padding(.horizontal, 24).padding(.top, 140)
+                Spacer()
+                HStack(alignment: .bottom, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        if let overlap, item.topic == overlap.topic, isCurrent, !dismissed {
+                            OverlapCard(overlap: overlap) { dismissed = true }
+                        }
+                        HStack(spacing: 10) {
+                            Avatar(item.user, size: 38)
+                            VStack(alignment: .leading, spacing: 1) {
+                                HStack(spacing: 5) {
+                                    Text(item.user.name).font(.system(size: 15.5, weight: .bold))
+                                    Image(systemName: "globe.americas.fill").font(.system(size: 12))
+                                }
+                                HStack(spacing: 5) {
+                                    Image(systemName: "music.note").font(.system(size: 12))
+                                    Text("\(firstName(item.user.name)) · Original audio").font(.system(size: 13.5)).lineLimit(1)
+                                }
+                            }
+                        }
+                        (Text(item.caption + " ") + Text("#" + item.topic.filter { !$0.isWhitespace }).bold())
+                            .font(.system(size: 15)).lineLimit(2).padding(.top, 8)
+                    }
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    VStack(spacing: 18) {
+                        rail(liked.contains(item.id) ? "hand.thumbsup.fill" : "hand.thumbsup", compactCount(likes + (liked.contains(item.id) ? 1 : 0)), "Like") { liked.formSymmetricDifference([item.id]) }
+                        rail("bubble.right", compactCount(40 + stableHash(item.id + "c") % 900), "Comment") { toast("Comments are mocked in this prototype.") }
+                        rail("arrowshape.turn.up.right", compactCount(10 + stableHash(item.id + "s") % 5000), "Share") { toast("Sharing is mocked in this prototype.") }
+                        rail(saved.contains(item.id) ? "bookmark.fill" : "bookmark", saved.contains(item.id) ? "Saved" : compactCount(20 + stableHash(item.id + "b") % 19000), "Save") { saved.formSymmetricDifference([item.id]) }
+                        rail("ellipsis", "", "More") { toast("More options are mocked in this prototype.") }
+                    }
+                }
+                .padding(.leading, 14).padding(.trailing, 10).padding(.bottom, tabBarSpace + 12)
+            }
+        }
+    }
+
+    private func rail(_ icon: String, _ label: String, _ name: String, _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 3) {
+                Image(systemName: icon).font(.system(size: 25, weight: .medium))
+                if !label.isEmpty { Text(label).font(.system(size: 12.5, weight: .bold)) }
+            }
+            .foregroundStyle(.white).frame(minWidth: 44)
+        }
+        .buttonStyle(FadePress()).accessibilityLabel(name)
+    }
+}
+
+// friends overlap: a small contextual card on a reel about something 3 or more
+// opted-in friends are also into. it gives a count and never says who.
+struct OverlapCard: View {
+    @EnvironmentObject var app: AppState
+    let overlap: Overlap
+    let onDismiss: () -> Void
+    @State private var shown = false
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Circle().fill(Muse.soft).frame(width: 30, height: 30).overlay(Image(systemName: "sparkles").font(.system(size: 13, weight: .bold)).foregroundStyle(Muse.text))
+            VStack(alignment: .leading, spacing: 2) {
+                Text("wait... \(overlap.count) of your friends are into \(overlap.topic) too").font(.system(size: 14.5, weight: .semibold)).foregroundStyle(Color(hex: 0x1c1e21))
+                Button {
+                    app.handoff = "\(overlap.topic) with whoever's into it"
+                    onDismiss()
+                    app.push(.musing(compose: false))
+                } label: { Text("make a move").font(.system(size: 14.5, weight: .bold)).foregroundStyle(Muse.text) }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Button(action: onDismiss) { Image(systemName: "xmark").font(.system(size: 13, weight: .semibold)).foregroundStyle(Color(hex: 0x6b6b70)).frame(width: 28, height: 28) }
+                .accessibilityLabel("dismiss")
+        }
+        .padding(.vertical, 10).padding(.horizontal, 12)
+        .background(Color(hex: 0xfaf7ff, alpha: 0.96), in: RoundedRectangle(cornerRadius: 16))
+        .padding(.bottom, 12)
+        .opacity(shown ? 1 : 0).offset(y: shown ? 0 : 30)
+        .onAppear { withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.5)) { shown = true } }
+    }
+}
+
+// ---------- marketplace ----------
+
+struct MarketplaceScreen: View {
+    @EnvironmentObject var app: AppState
+    @State private var tab = "Explore"
+    private let columns = [GridItem(.flexible(), spacing: 4), GridItem(.flexible(), spacing: 4)]
+
+    var body: some View {
+        VStack(spacing: 0) {
+            FbHeader(title: "Marketplace", actions: [.messenger, .search, .more])
+            HStack(spacing: 0) {
+                ScrollView(.horizontal) {
+                    HStack(spacing: 2) {
+                        ForEach(Mock.marketTabs, id: \.self) { t in
+                            Button {
+                                if t == "Sell" { toast("Listing an item is mocked in this prototype.") } else { tab = t }
+                            } label: {
+                                Text(t).font(.system(size: 16, weight: .semibold)).foregroundStyle(tab == t ? FB.blue : FB.text)
+                                    .padding(.horizontal, 14).frame(height: 38).background(tab == t ? FB.blueSoft : .clear, in: Capsule())
+                            }
+                            .buttonStyle(FadePress())
+                            .accessibilityAddTraits(tab == t ? .isSelected : [])
+                        }
+                    }
+                    .padding(.horizontal, 10)
+                }
+                .scrollIndicators(.hidden)
+                Button { toast("Atlanta, Georgia · within 40 miles. Mock location.") } label: { Image(systemName: "mappin.and.ellipse").font(.system(size: 20)).foregroundStyle(FB.text).padding(.horizontal, 12) }
+                    .accessibilityLabel("Location")
+            }
+            .padding(.bottom, 8)
+            ScrollView {
+                if tab == "Jobs" || tab == "Services" {
+                    LazyVStack(spacing: 0) {
+                        ForEach(tab == "Jobs" ? Mock.jobs : Mock.services) { r in
+                            Button { toast("Mock listing. Nothing to apply to or book.") } label: {
+                                HStack(spacing: 12) {
+                                    Circle().fill(FB.input).frame(width: 44, height: 44).overlay(Image(systemName: tab == "Jobs" ? "briefcase" : "wrench.and.screwdriver").font(.system(size: 18)).foregroundStyle(FB.text))
+                                    VStack(alignment: .leading, spacing: 1) {
+                                        Text(r.title).font(.system(size: 16, weight: .semibold)).foregroundStyle(FB.text)
+                                        Text("\(r.who) · \(r.pay)").font(.system(size: 14)).foregroundStyle(FB.muted)
+                                    }
+                                    Spacer()
+                                }
+                                .padding(.horizontal, 14).padding(.vertical, 12)
+                            }
+                            .buttonStyle(RowPress())
+                        }
+                    }
+                    .padding(.bottom, tabBarSpace)
+                } else {
+                    let items = tab == "Local" ? Mock.listings.filter(\.nearby) : tab == "More" ? Mock.listings.reversed() : Mock.listings
+                    LazyVGrid(columns: columns, spacing: 0) {
+                        ForEach(items) { item in ListingTile(item: item) { app.push(.listing(item.id)) } }
+                    }
+                    .padding(.bottom, tabBarSpace)
+                }
+            }
+            .scrollIndicators(.hidden)
+        }
+        .background(Color.white)
+    }
+}
+
+// dense two-column tile: square image, then "price · title" on one line.
+struct ListingTile: View {
+    let item: Mock.Listing
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 0) {
+                Pic(path: item.image).aspectRatio(1, contentMode: .fit)
+                    .overlay(alignment: .topLeading) {
+                        if item.nearby {
+                            Text("Nearby").font(.system(size: 12.5, weight: .medium)).foregroundStyle(FB.text)
+                                .padding(.horizontal, 6).padding(.vertical, 2).background(Color.white, in: RoundedRectangle(cornerRadius: 5)).padding(8)
+                        }
+                    }
+                (Text(money(item.price)).fontWeight(.medium)
+                    + Text(item.was.map { " " + money($0) } ?? "").foregroundStyle(FB.muted).strikethrough()
+                    + Text(" · \(item.title)"))
+                    .font(.system(size: 15.5)).foregroundStyle(FB.text).lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 8).padding(.top, 8).padding(.bottom, 10)
+            }
+        }
+        .buttonStyle(FadePress())
+        .accessibilityLabel("\(item.title), \(money(item.price))")
+    }
+}
+
+// lightweight product detail. mock data, no payments, no real sellers.
+struct ListingScreen: View {
+    @EnvironmentObject var app: AppState
+    let listingId: String
+    @State private var saved = false
+    private let columns = [GridItem(.flexible(), spacing: 4), GridItem(.flexible(), spacing: 4)]
+
+    var body: some View {
+        SubScreen(title: "Marketplace") {
+            if let item = Mock.listings.first(where: { $0.id == listingId }) {
+                let more = Array(Mock.listings.filter { $0.category == item.category && $0.id != item.id }.prefix(4))
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Pic(path: item.image).aspectRatio(1, contentMode: .fit)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(item.title).font(.system(size: 22, weight: .bold)).foregroundStyle(FB.text)
+                            (Text(money(item.price)).fontWeight(.semibold) + Text(item.was.map { "  " + money($0) } ?? "").foregroundStyle(FB.muted).strikethrough())
+                                .font(.system(size: 19)).foregroundStyle(FB.text)
+                            Text("Listed in \(item.place) · \(item.category)").font(.system(size: 14)).foregroundStyle(FB.muted)
+                            HStack(spacing: 8) {
+                                pill("message.fill", "Message", primary: true) { toast("Message sent to the seller. Mock only.") }
+                                pill(saved ? "bookmark.fill" : "bookmark", saved ? "Saved" : "Save") { saved.toggle() }
+                                pill("arrowshape.turn.up.right", "Share") { toast("Sharing is mocked in this prototype.") }
+                            }
+                            .padding(.vertical, 10)
+                            heading("Description")
+                            Text(item.about).font(.system(size: 16)).lineSpacing(3).foregroundStyle(FB.text)
+                            heading("Seller information")
+                            if let seller = app.user(item.seller) {
+                                Button { app.push(.person(seller.id)) } label: {
+                                    HStack(spacing: 12) {
+                                        Avatar(seller, size: 48)
+                                        VStack(alignment: .leading, spacing: 0) {
+                                            Text(seller.name).font(.system(size: 16, weight: .semibold)).foregroundStyle(FB.text)
+                                            Text("Joined Facebook in 2019 · mock profile").font(.system(size: 14)).foregroundStyle(FB.muted)
+                                        }
+                                        Spacer()
+                                    }
+                                    .padding(.vertical, 6)
+                                }
+                                .buttonStyle(RowPress())
+                            }
+                            if !more.isEmpty { heading("More like this") }
+                        }
+                        .padding(14)
+                        LazyVGrid(columns: columns, spacing: 0) {
+                            ForEach(more) { m in
+                                ListingTile(item: m) {
+                                    app.back()
+                                    app.push(.listing(m.id))
+                                }
+                            }
+                        }
+                    }
+                    .padding(.bottom, 40)
+                }
+            } else {
+                Text("This listing isn't available.").foregroundStyle(FB.muted).padding(24)
+            }
+        }
+    }
+
+    private func heading(_ t: String) -> some View {
+        Text(t).font(.system(size: 18, weight: .bold)).foregroundStyle(FB.text).padding(.top, 12).padding(.bottom, 2)
+    }
+
+    private func pill(_ icon: String, _ label: String, primary: Bool = false, _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: icon).font(.system(size: 15))
+                Text(label).font(.system(size: 15, weight: primary ? .bold : .semibold))
+            }
+            .foregroundStyle(primary ? Color.white : FB.text)
+            .frame(maxWidth: .infinity).frame(height: 40)
+            .background(primary ? FB.blue : FB.button, in: RoundedRectangle(cornerRadius: 8))
+        }
+        .buttonStyle(FadePress())
+    }
+}
+
+// ---------- dating ----------
+
+// facebook dating shell. fictional profiles, local interactions only. not connected to musing.
+struct DatingScreen: View {
+    @State private var tab = "Explore"
+    @State private var banner = true
+    @State private var at: [String: Int] = [:]
+    @State private var answer: Int?
+    private let dots = ["Friendship", "Matches", "Explore"]
+    private let columns = [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)]
+
+    var body: some View {
+        let pool = Mock.datingProfiles.filter { $0.tags.contains(tab) }
+        let profile = pool.isEmpty ? nil : pool[(at[tab] ?? 0) % pool.count]
+        VStack(spacing: 0) {
+            FbHeader(title: "Dating", actions: [.assistant, .more])
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    ScrollView(.horizontal) {
+                        HStack(spacing: 8) {
+                            ForEach(Mock.datingTabs, id: \.self) { t in
+                                Button { tab = t } label: {
+                                    Text(t).font(.system(size: 15.5, weight: .semibold)).foregroundStyle(tab == t ? Muse.dating : FB.text)
+                                        .padding(.horizontal, 14).frame(height: 38).background(tab == t ? Muse.soft : FB.button, in: Capsule())
+                                        .overlay(alignment: .topTrailing) {
+                                            if dots.contains(t) { Circle().fill(Color(hex: 0x7c4dff)).frame(width: 8, height: 8).offset(x: -6, y: 4) }
+                                        }
+                                }
+                                .buttonStyle(FadePress())
+                            }
+                        }
+                        .padding(.horizontal, 12).padding(.bottom, 12)
+                    }
+                    .scrollIndicators(.hidden)
+
+                    if banner {
+                        HStack(alignment: .top, spacing: 10) {
+                            Pic(path: "dating/jordan.jpg").frame(width: 40, height: 40).clipShape(Circle())
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Your dating assistant has a new idea for you and your match Jordan.").font(.system(size: 15.5, weight: .medium)).foregroundStyle(FB.text)
+                                Button { toast("A bowling alley with a jukebox, apparently. Mock data.") } label: { Text("See more updates").font(.system(size: 15)).foregroundStyle(Muse.dating) }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            Button { banner = false } label: { Image(systemName: "xmark").font(.system(size: 15, weight: .semibold)).foregroundStyle(FB.text) }
+                                .accessibilityLabel("Dismiss")
+                        }
+                        .padding(10).background(Muse.soft, in: RoundedRectangle(cornerRadius: 12))
+                        .padding(.horizontal, 12).padding(.bottom, 14)
+                    }
+
+                    if let profile {
+                        VStack(alignment: .leading, spacing: 0) {
+                            Pic(path: profile.image).aspectRatio(1.02, contentMode: .fit)
+                                .overlay(alignment: .bottomTrailing) {
+                                    HStack(spacing: 14) {
+                                        fab("xmark", fill: .white, ink: Muse.dating, label: "Pass") { next(profile, liked: false) }
+                                        fab("heart.fill", fill: Muse.dating, ink: .white, label: "Like") { next(profile, liked: true) }
+                                    }
+                                    .padding(.trailing, 16).offset(y: 22)
+                                }
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("\(profile.name), \(profile.age)").font(.system(size: 23, weight: .bold)).foregroundStyle(FB.text)
+                                Text(profile.line).font(.system(size: 16)).foregroundStyle(FB.text)
+                            }
+                            .frame(maxWidth: .infinity, minHeight: 72, alignment: .topLeading).padding(16)
+                        }
+                        .background(Color.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .shadow(color: .black.opacity(0.12), radius: 8, y: 2)
+                        .padding(.horizontal, 12)
+                    } else {
+                        Text("No one here right now. Mock data.").foregroundStyle(FB.muted).frame(maxWidth: .infinity).padding(40)
+                    }
+
+                    HStack(spacing: 8) {
+                        Circle().fill(Muse.soft).frame(width: 26, height: 26).overlay(Image(systemName: "sparkles").font(.system(size: 12, weight: .bold)).foregroundStyle(Muse.dating))
+                        Text("Ask your dating assistant").font(.system(size: 17, weight: .bold)).foregroundStyle(FB.text)
+                    }
+                    .padding(.horizontal, 14).padding(.top, 22).padding(.bottom, 10)
+                    LazyVGrid(columns: columns, spacing: 8) {
+                        ForEach(Array(Mock.datingQuestions.enumerated()), id: \.offset) { i, q in
+                            Button { answer = answer == i ? nil : i } label: {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text(q.emoji).font(.system(size: 18))
+                                    Text(q.q).font(.system(size: 15, weight: .medium)).foregroundStyle(FB.text).multilineTextAlignment(.leading)
+                                }
+                                .frame(maxWidth: .infinity, minHeight: 64, alignment: .topLeading).padding(12)
+                                .overlay(RoundedRectangle(cornerRadius: 12).stroke(answer == i ? Muse.dating : FB.divider, lineWidth: 1))
+                            }
+                            .buttonStyle(FadePress())
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                    if let answer {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(Mock.datingQuestions[answer].a).font(.system(size: 15.5)).lineSpacing(3).foregroundStyle(FB.text)
+                            Text("Canned mock answer. No AI call is made here.").font(.system(size: 12)).foregroundStyle(FB.muted)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading).padding(12)
+                        .background(Muse.soft, in: RoundedRectangle(cornerRadius: 12)).padding(.horizontal, 12).padding(.top, 10)
+                    }
+                }
+                .padding(.bottom, tabBarSpace)
+            }
+            .scrollIndicators(.hidden)
+        }
+        .background(Color.white)
+    }
+
+    private func next(_ profile: Mock.DatingProfile, liked: Bool) {
+        if liked { toast("You liked \(profile.name). Mock only, no one is notified.") }
+        at[tab, default: 0] += 1
+    }
+
+    private func fab(_ icon: String, fill: Color, ink: Color, label: String, _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Circle().fill(fill).frame(width: 66, height: 66).shadow(color: .black.opacity(0.2), radius: 6, y: 2)
+                .overlay(Image(systemName: icon).font(.system(size: 26, weight: .semibold)).foregroundStyle(ink))
+        }
+        .buttonStyle(FadePress()).accessibilityLabel(label)
+    }
+}
+
+// ---------- notifications ----------
+
+private struct NoteRow: Identifiable {
+    enum Who { case person(Person), muse, facebook, image(String) }
+    let id: String
+    let parts: [Mock.Part]
+    let age: String
+    let unread: Bool
+    let badge: (icon: String, color: Color)
+    let who: Who
+    var thumb: String?
+    let go: Route?
+    var tab: AppTab?
+}
+
+private let noteBadges: [String: (icon: String, color: Color)] = [
+    "love": ("heart.fill", Color(hex: 0xf3425f)),
+    "post": ("text.bubble.fill", FB.blue),
+    "comment": ("bubble.left.fill", Color(hex: 0x31a24c)),
+    "market": ("storefront.fill", Color(hex: 0x0aa5a5)),
+    "dating": ("heart.circle.fill", Color(hex: 0x7c4dff)),
+    "security": ("checkmark.shield.fill", FB.blue),
+    "friend": ("calendar", Color(hex: 0xf3425f)),
+]
+
+private func nameList(_ people: [Person]) -> String {
+    let n = people.map { firstName($0.name).lowercased() }
+    return n.count <= 1 ? (n.first ?? "") : n.dropLast().joined(separator: ", ") + " and " + n[n.count - 1]
+}
+
+// musing. rows, built from what this person is allowed to see. before a plan is
+// happening they carry a count, never names.
+private func musingRows(_ home: MusingHome?, me: String) -> [NoteRow] {
+    guard let home else { return [] }
+    var rows: [NoteRow] = []
+    func add(_ p: PlanView, _ key: String, _ parts: [Mock.Part], _ who: NoteRow.Who, unread: Bool = true) {
+        rows.append(NoteRow(id: "m-\(p.id)-\(key)", parts: parts, age: "now", unread: unread, badge: ("sparkles", Muse.start), who: who, go: .plan(p.id)))
+    }
+    typealias P = Mock.Part
+    for p in home.asks {
+        let starter = firstName(p.starter.name).lowercased()
+        if p.state == "proposing", p.me?.status == "pending" {
+            add(p, "ask", [P(t: starter, b: true), P(t: " is thinking about "), P(t: p.activity ?? "something", b: true), P(t: ", \(p.when ?? "soon"). muse thought of you. your answer stays private.")], .person(p.starter))
+        } else if p.state == "happening", p.me?.status == "down" {
+            add(p, "on", [P(t: "\(p.activity ?? "the plan") with "), P(t: starter, b: true), P(t: " is happening. \(p.when ?? "").")], .person(p.starter))
+        }
+    }
+    for p in home.mine {
+        if p.state == "happening" {
+            let others = (p.going ?? []).filter { $0.id != me }
+            add(p, "real", [P(t: nameList(others), b: true), P(t: " \(others.count == 1 ? "is" : "are") down for your "), P(t: p.activity ?? "plan", b: true), P(t: ". it's happening.")], others.first.map { .person($0) } ?? .muse)
+        } else if p.state == "proposing" {
+            if p.note != nil, p.version > 1 { add(p, "v\(p.version)", [P(t: "muse found a new time that works for everyone: "), P(t: p.when ?? "", b: true), P(t: ".")], .muse) }
+            if p.downCount > 0 { add(p, "c\(p.downCount)", [P(t: "\(p.downCount) of \(p.quorum)", b: true), P(t: " are in for your \(p.activity ?? "plan") so far. names show once it's on.")], .muse) }
+        } else if p.state == "draft" {
+            add(p, "draft", [P(t: "muse drafted a plan for "), P(t: p.activity ?? "your thought", b: true), P(t: ". nothing has been sent yet.")], .muse, unread: false)
+        }
+    }
+    return rows
+}
+
+struct NotificationsScreen: View {
+    @EnvironmentObject var app: AppState
+    @State private var home: MusingHome?
+    @State private var read: Set<String> = []
+
+    private var rows: [NoteRow] {
+        let mock = Mock.notifications.filter { $0.from != app.userId }.map { n -> NoteRow in
+            let who: NoteRow.Who = app.user(n.from).map { .person($0.person) } ?? Mock.datingProfiles.first { $0.id == n.from }.map { .image($0.image) } ?? .facebook
+            return NoteRow(id: n.id, parts: n.text, age: n.age, unread: n.unread, badge: noteBadges[n.kind] ?? ("bell.fill", FB.blue), who: who, thumb: n.thumb, go: nil, tab: n.to)
+        }
+        return musingRows(home, me: app.userId) + mock
+    }
+
+    var body: some View {
+        let list = rows
+        VStack(spacing: 0) {
+            FbHeader(title: "Notifications", actions: [.messenger, .search, .more], onMore: { read = Set(list.map(\.id)) })
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    Text("New").font(.system(size: 18, weight: .bold)).foregroundStyle(FB.text).padding(.horizontal, 14).padding(.bottom, 6)
+                    ForEach(list) { item in
+                        let unread = item.unread && !read.contains(item.id)
+                        Button {
+                            read.insert(item.id)
+                            if let route = item.go { app.push(route) } else if let tab = item.tab { app.go(tab) }
+                        } label: {
+                            HStack(alignment: .top, spacing: 12) {
+                                avatar(item.who)
+                                    .overlay(alignment: .bottomTrailing) {
+                                        Circle().fill(item.badge.color).frame(width: 28, height: 28)
+                                            .overlay(Image(systemName: item.badge.icon).font(.system(size: 12, weight: .semibold)).foregroundStyle(.white))
+                                            .overlay(Circle().stroke(Color.white, lineWidth: 2)).offset(x: 4, y: 2)
+                                    }
+                                richText(item.parts, size: 15.5, trailing: " " + item.age).lineLimit(4).multilineTextAlignment(.leading)
+                                    .frame(maxWidth: .infinity, alignment: .leading).padding(.top, 4)
+                                if let thumb = item.thumb { Pic(path: thumb).frame(width: 56, height: 44).clipShape(RoundedRectangle(cornerRadius: 6)).padding(.top, 8) }
+                                Image(systemName: "ellipsis").font(.system(size: 17, weight: .semibold)).foregroundStyle(FB.text).padding(.top, 8)
+                            }
+                            .padding(.horizontal, 14).padding(.vertical, 8)
+                            .background(unread ? FB.blueSoft : Color.white)
+                        }
+                        .buttonStyle(FadePress())
+                    }
+                }
+                .padding(.bottom, tabBarSpace)
+            }
+            .scrollIndicators(.hidden)
+        }
+        .background(Color.white)
+        .task(id: "\(app.userId)-\(app.version)") {
+            home = nil
+            await load()
+        }
+        .onTableChange("plans") { Task { await load() } }
+    }
+
+    private func load() async {
+        let user = app.userId
+        let h: MusingHome? = try? await API.get("/api/musing/home", user: user)
+        guard user == app.userId, !Task.isCancelled, let h else { return }
+        home = h
+    }
+
+    @ViewBuilder private func avatar(_ who: NoteRow.Who) -> some View {
+        switch who {
+        case .person(let p): Avatar(p, size: 62)
+        case .muse: MuseAvatar(size: 62)
+        case .image(let path): Pic(path: path).frame(width: 62, height: 62).clipShape(Circle())
+        case .facebook: Circle().fill(FB.blue).frame(width: 62, height: 62).overlay(Text("f").font(.system(size: 46, weight: .heavy)).foregroundStyle(.white).offset(y: 4))
+        }
+    }
+}

@@ -70,8 +70,10 @@ export async function runStructured<S extends z.ZodType>(opts: StructuredOpts<S>
 
   for (let attempt = 1; attempt <= 2; attempt++) {
     const t0 = Date.now();
+    let usage: Usage = { attempt };
     try {
-      const { text, finishReason, reasoningTokens, completionTokens } = await complete(opts, jsonSchema, attempt);
+      const { text, finishReason, reasoningTokens, completionTokens, promptTokens } = await complete(opts, jsonSchema, attempt);
+      usage = { attempt, promptTokens, completionTokens, reasoningTokens };
       const latencyMs = Date.now() - t0;
       if (finishReason === "length") {
         throw new Error(`truncated: ${completionTokens ?? "?"} completion tokens (${reasoningTokens ?? "?"} reasoning)`);
@@ -97,6 +99,7 @@ export async function runStructured<S extends z.ZodType>(opts: StructuredOpts<S>
         ok: true,
         summary: opts.summarize?.(parsed.data) ?? "ok",
         planId: opts.planId ?? null,
+        usage,
       });
       await cachePut(cacheKey, parsed.data);
       return { data: parsed.data, source: "live", latencyMs, attempts: attempt };
@@ -110,6 +113,7 @@ export async function runStructured<S extends z.ZodType>(opts: StructuredOpts<S>
         ok: false,
         summary: `attempt ${attempt} failed: ${msg.slice(0, 160)}`,
         planId: opts.planId ?? null,
+        usage,
       });
       opts.stream?.onRestart?.();
     }
@@ -125,7 +129,7 @@ export async function runStructured<S extends z.ZodType>(opts: StructuredOpts<S>
   throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
 }
 
-type Completion = { text: string; finishReason: string | null; reasoningTokens?: number; completionTokens?: number };
+type Completion = { text: string; finishReason: string | null; reasoningTokens?: number; completionTokens?: number; promptTokens?: number };
 
 // one chat completion, streamed when opts.stream is set. meta returns json keys in
 // alphabetical order, so the streamed field shows up once earlier keys are done.
@@ -153,6 +157,7 @@ async function complete<S extends z.ZodType>(opts: StructuredOpts<S>, jsonSchema
       finishReason: choice?.finish_reason ?? null,
       reasoningTokens: res.usage?.completion_tokens_details?.reasoning_tokens,
       completionTokens: res.usage?.completion_tokens,
+      promptTokens: res.usage?.prompt_tokens,
     };
   }
 
@@ -162,6 +167,7 @@ async function complete<S extends z.ZodType>(opts: StructuredOpts<S>, jsonSchema
   let finishReason: string | null = null;
   let reasoningTokens: number | undefined;
   let completionTokens: number | undefined;
+  let promptTokens: number | undefined;
   for await (const chunk of stream) {
     const choice = chunk.choices?.[0];
     const delta = choice?.delta?.content;
@@ -174,9 +180,10 @@ async function complete<S extends z.ZodType>(opts: StructuredOpts<S>, jsonSchema
     if (chunk.usage) {
       reasoningTokens = chunk.usage.completion_tokens_details?.reasoning_tokens;
       completionTokens = chunk.usage.completion_tokens;
+      promptTokens = chunk.usage.prompt_tokens;
     }
   }
-  return { text, finishReason, reasoningTokens, completionTokens };
+  return { text, finishReason, reasoningTokens, completionTokens, promptTokens };
 }
 
 export type ImageOpts = {
@@ -249,8 +256,14 @@ function neverConnected(e: unknown, elapsedMs: number): boolean {
 
 // ---------- trace + cache ----------
 
-async function trace(t: { job: JobName; model: string; latencyMs: number; ok: boolean; summary: string; planId: string | null }) {
+type Usage = { attempt?: number; promptTokens?: number; completionTokens?: number; reasoningTokens?: number };
+
+async function trace(t: { job: JobName; model: string; latencyMs: number; ok: boolean; summary: string; planId: string | null; usage?: Usage }) {
   const { error } = await serverDb().from("muse_trace").insert({
+    prompt_tokens: t.usage?.promptTokens ?? null,
+    completion_tokens: t.usage?.completionTokens ?? null,
+    reasoning_tokens: t.usage?.reasoningTokens ?? null,
+    attempt: t.usage?.attempt ?? (t.model === "cache" ? 0 : null),
     job: t.job,
     model: t.model,
     latency_ms: t.latencyMs,

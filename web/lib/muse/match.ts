@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { FreeWindow } from "@/lib/types";
-import { DAYS, isTime, windowsLine } from "@/lib/when";
+import { DAYS, isFreeAt, isTime, windowsLine } from "@/lib/when";
 import { runStructured, type StructuredResult } from "./run";
 import type { Understood } from "./understand";
 import { VOICE } from "./voice";
@@ -48,11 +48,16 @@ const SYSTEM = `you are muse, the quiet planner inside musing. someone shared a 
 
 ${VOICE}
 
+the plan is what they asked for. if they said food, it is a meal. if they said karaoke, it is karaoke. the starter's interests help you choose people, they never change the activity.
+
 rules for picking:
-- pick 3 friends, 4 only if a fourth is a clearly strong fit. fewer and better beats more.
+- pick 3 friends, 4 only if a fourth is a clearly strong fit. fewer and better beats more. if only one or two candidates are free and fit, return just those.
 - only use user_id values from the candidate list. never invent an id.
 - a good pick shares the interest AND is free when the starter is free. someone who can't make the time is not a good pick.
-- choose one day and start time inside the starter's free windows where the most picks are free.
+- if the starter named a day or a time of day, keep it. move it only when the starter is not free then.
+- otherwise choose one day and start time inside the starter's free windows where the most picks are free.
+- never pick someone who is not free at the day and time you chose.
+- the start time must suit the activity. dinner is an evening thing, brunch is late morning.
 
 return these fields:
 - activity: the plan in two to five lowercase words ("a thrift run", "ramen night").
@@ -81,7 +86,14 @@ ${lines.join("\n")}`;
 }
 
 export function match(input: MatchInput, onText?: (delta: string) => void, onRestart?: () => void): Promise<StructuredResult<Matched>> {
-  const allowed = new Set(input.candidates.map((c) => c.id));
+  // muse sometimes writes an id the way the name is spelled ("tomás" for "tomas").
+  // map anything that unambiguously means a candidate back to the real id; reject the rest.
+  const norm = (v: string) => v.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+  const canon = new Map<string, string>();
+  for (const c of input.candidates) {
+    canon.set(norm(c.id), c.id);
+    if (!canon.has(norm(c.firstName))) canon.set(norm(c.firstName), c.id);
+  }
   return runStructured({
     job: "match",
     schema: MatchSchema,
@@ -93,14 +105,18 @@ export function match(input: MatchInput, onText?: (delta: string) => void, onRes
     preferCache: input.preferCache,
     // the backend is the only source of user ids. anything else is rejected here.
     check: (o) => {
-      if (o.picks.length < 2 || o.picks.length > 4) return `expected 2 to 4 picks, got ${o.picks.length}`;
+      // a person with few free friends still gets a plan, even if it is just one friend
+      if (o.picks.length < 1 || o.picks.length > 4) return `expected 1 to 4 picks, got ${o.picks.length}`;
       const seen = new Set<string>();
       for (const p of o.picks) {
-        if (!allowed.has(p.user_id)) return `unknown user id "${p.user_id}"`;
+        const id = canon.get(norm(p.user_id));
+        if (!id) return `unknown user id "${p.user_id}"`;
+        p.user_id = id;
         if (seen.has(p.user_id)) return `duplicate pick "${p.user_id}"`;
         seen.add(p.user_id);
       }
       if (!isTime(o.when_time)) return `bad when_time "${o.when_time}"`;
+      if (!isFreeAt(input.starter.free_windows, o.when_day, o.when_time)) return `the starter is not free ${o.when_day} ${o.when_time}`;
       return null;
     },
     summarize: (o) => `${o.activity} · ${o.when_day} ${o.when_time} · picked ${o.picks.map((p) => p.user_id).join(", ")}`,

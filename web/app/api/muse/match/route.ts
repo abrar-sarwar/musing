@@ -7,7 +7,7 @@ import { createDraftFromMatch } from "@/lib/plans";
 import { getSettings } from "@/lib/settings";
 import { firstName } from "@/lib/time";
 import type { User } from "@/lib/types";
-import { todayLine } from "@/lib/when";
+import { isFreeAt, todayLine } from "@/lib/when";
 
 // the mix. POST { museId } -> sse: "delta" {text}..., "done" {planId, source, latencyMs}
 // the plan it makes is a draft: only the starter sees it until they send it.
@@ -27,7 +27,7 @@ export async function POST(req: Request) {
     // candidates are this person's friends and nobody else. the ids muse may use come from here.
     const { data: edges } = await db.from("friendships").select("friend_id").eq("user_id", user.id);
     const friendIds = (edges ?? []).map((e) => e.friend_id as string);
-    if (friendIds.length < 2) return Response.json({ ok: false, error: "not enough friends in the mock data for this person" }, { status: 409 });
+    if (friendIds.length < 1) return Response.json({ ok: false, error: "not enough friends in the mock data for this person" }, { status: 409 });
     const [{ data: friends }, { data: topics }] = await Promise.all([
       db.from("users").select("*").in("id", friendIds),
       db.from("reels_topics").select("user_id,topic,score").in("user_id", friendIds).order("score", { ascending: false }),
@@ -54,7 +54,11 @@ export async function POST(req: Request) {
         (delta) => send("delta", { text: delta }),
         () => send("restart", {}),
       );
-      const planId = await createDraftFromMatch(muse.id as string, user.id, r.data);
+      // the server has the last word on availability: drop anyone who is not free at the
+      // chosen time, as long as that still leaves someone to ask.
+      const free = r.data.picks.filter((p) => isFreeAt(candidates.find((c) => c.id === p.user_id)?.free_windows ?? [], r.data.when_day, r.data.when_time));
+      const picks = free.length > 0 ? free : r.data.picks;
+      const planId = await createDraftFromMatch(muse.id as string, user.id, { ...r.data, picks });
       send("done", { planId, source: r.source, latencyMs: r.latencyMs });
     });
   } catch (e) {

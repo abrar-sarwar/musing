@@ -1,0 +1,132 @@
+import SwiftUI
+
+enum AppTab: String, CaseIterable {
+    case home, reels, marketplace, dating, notifications, profile
+}
+
+enum Route: Hashable {
+    case search, menu, messages, thread(String), events, event(String), listing(String), person(String)
+    case musing(compose: Bool), plan(String), musingSettings, nudge, recap
+}
+
+// tiny toast for mocked facebook actions, so nothing on screen is a dead button.
+@MainActor
+final class ToastCenter: ObservableObject {
+    static let shared = ToastCenter()
+    @Published var text: String?
+    private var hide: Task<Void, Never>?
+
+    func show(_ t: String) {
+        hide?.cancel()
+        withAnimation(.easeOut(duration: 0.14)) { text = t }
+        hide = Task {
+            try? await Task.sleep(for: .seconds(1.7))
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeIn(duration: 0.22)) { text = nil }
+        }
+    }
+}
+
+@MainActor
+func toast(_ text: String) { ToastCenter.shared.show(text) }
+
+// the acting user (no login: act as any seeded person), the demo controls and navigation.
+@MainActor
+final class AppState: ObservableObject {
+    private static let userKey = "musing_user"
+    private static let traceKey = "musing_trace"
+    private static let demoOrder = ["maya", "alex", "jo", "sam"]
+
+    @Published var userId: String
+    @Published var users: [User] = []
+    /// bumps whenever data should refetch (user switch, reset)
+    @Published var version = 0
+    @Published var switcherOpen = false
+    // muse on/off, replay and posters are global (server side, so both phones agree).
+    @Published var settings = Settings()
+    // the trace panel is per device.
+    @Published var traceOn: Bool { didSet { UserDefaults.standard.set(traceOn, forKey: Self.traceKey) } }
+    /// a thought handed to the composer from elsewhere (reels card, recap, suggestion)
+    @Published var handoff: String?
+    @Published var path: [Route] = []
+    @Published var tab: AppTab = .home
+    private var pendingActAs: String?
+
+    init() {
+        userId = UserDefaults.standard.string(forKey: Self.userKey) ?? "maya"
+        traceOn = UserDefaults.standard.bool(forKey: Self.traceKey)
+    }
+
+    var me: User? { users.first { $0.id == userId } }
+    func user(_ id: String?) -> User? { id.flatMap { id in users.first { $0.id == id } } }
+
+    // ---- navigation ----
+    func push(_ route: Route) { path.append(route) }
+    func back() { if !path.isEmpty { path.removeLast() } }
+    func go(_ tab: AppTab) {
+        path.removeAll()
+        self.tab = tab
+    }
+
+    // ---- acting user ----
+    func loadUsers() async {
+        do {
+            let rows: [User] = try await Supa.select("users", "select=*")
+            let rank: (User) -> Int = { Self.demoOrder.firstIndex(of: $0.id) ?? 99 }
+            users = rows.sorted { (rank($0), $0.name) < (rank($1), $1.name) }
+            if let id = pendingActAs { actAs(id) }
+        } catch {
+            print("users load failed:", errorText(error))
+        }
+    }
+
+    func switchTo(_ id: String) {
+        userId = id
+        UserDefaults.standard.set(id, forKey: Self.userKey)
+        switcherOpen = false
+        version += 1
+    }
+
+    // demo affordance: a link with ?as=<userId> switches the acting user first, so a
+    // deep link can open a second phone straight into a friend's view.
+    func actAs(_ id: String) {
+        guard !users.isEmpty else {
+            pendingActAs = id
+            return
+        }
+        pendingActAs = nil
+        if id != userId, users.contains(where: { $0.id == id }) { switchTo(id) }
+    }
+
+    func resetDemo() async throws {
+        try await API.data("POST", "/api/reset", user: userId)
+        version += 1
+    }
+
+    // ---- demo controls ----
+    func loadSettings() async {
+        if let s: Settings = try? await API.get("/api/settings", user: userId) { settings = s }
+    }
+
+    func setSetting(_ key: String, _ value: Bool) async {
+        switch key {
+        case "muse_on": settings.museOn = value
+        case "muse_replay": settings.museReplay = value
+        default: settings.postersOn = value
+        }
+        if let s: Settings = try? await API.post("/api/settings", user: userId, body: ["key": key, "value": value]) {
+            settings = s
+        } else {
+            await loadSettings()
+        }
+    }
+}
+
+extension View {
+    /// runs the action whenever a row in `table` changes. screens refetch through the api.
+    func onTableChange(_ table: String, perform action: @escaping () -> Void) -> some View {
+        onReceive(NotificationCenter.default.publisher(for: .tableChanged)) { note in
+            if note.object as? String == table { action() }
+        }
+    }
+}
