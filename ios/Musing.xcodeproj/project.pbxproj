@@ -15,6 +15,7 @@
 		411E27A1D66A9666B92AE4B6 /* HomeScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8313505AAD8B203FF396618B /* HomeScreen.swift */; };
 		41D69F0EAB55E70DC97B02FF /* MusingApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91A02AEA219B126BBB6A7BE3 /* MusingApp.swift */; };
 		4C0C7008FD1DC231767DF8D9 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03D86AEA4EFA2E35E76B79F4 /* Models.swift */; };
+		4F4545444241434B30303031 /* MemoriesFeedback.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F4545444241434B30303032 /* MemoriesFeedback.swift */; };
 		538E3A28B28CE7D90832E57E /* MusingScreens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1044FCEE089D4A38F99108DD /* MusingScreens.swift */; };
 		60EEA2BBDD4F62344CF3D3C6 /* ChatScreens.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBB047C7D1E0507BE278AD1F /* ChatScreens.swift */; };
 		6BA9FFA071B6F55DFA596342 /* CalendarScreens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E9D808A5134CDFF95C8E33E /* CalendarScreens.swift */; };
@@ -54,6 +55,7 @@
 		486FAEBE1D661DBCF5510D00 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		4A58ED0F113C5D6C6C098F70 /* DraftEditing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DraftEditing.swift; sourceTree = "<group>"; };
 		4D5E0E7B24ACB32CD9B5689A /* MuseCharacter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MuseCharacter.swift; sourceTree = "<group>"; };
+		4F4545444241434B30303032 /* MemoriesFeedback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoriesFeedback.swift; sourceTree = "<group>"; };
 		5604F50B9594968202DDCDFE /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		584CAD050334071E5ABF9D40 /* MuseCompanion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MuseCompanion.swift; sourceTree = "<group>"; };
 		584EFCD5124E34A0BCEC14FD /* Musing.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Musing.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -93,6 +95,7 @@
 				8313505AAD8B203FF396618B /* HomeScreen.swift */,
 				5604F50B9594968202DDCDFE /* Info.plist */,
 				81597564723C367725B24983 /* MessagesEvents.swift */,
+				4F4545444241434B30303032 /* MemoriesFeedback.swift */,
 				46CFF1AAB126FDC7E7661239 /* MockData.swift */,
 				03D86AEA4EFA2E35E76B79F4 /* Models.swift */,
 				4D5E0E7B24ACB32CD9B5689A /* MuseCharacter.swift */,
@@ -282,6 +285,7 @@
 				A0BD911A19291B81127AF821 /* DraftEditing.swift in Sources */,
 				411E27A1D66A9666B92AE4B6 /* HomeScreen.swift in Sources */,
 				B8DFFFD5D5C461A7FF331B1C /* MessagesEvents.swift in Sources */,
+				4F4545444241434B30303031 /* MemoriesFeedback.swift in Sources */,
 				24FF0AB0FADA07BC46517F7F /* MockData.swift in Sources */,
 				4C0C7008FD1DC231767DF8D9 /* Models.swift in Sources */,
 				BCD66556D80B714B1EF63391 /* MuseCharacter.swift in Sources */,

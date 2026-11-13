@@ -636,6 +636,10 @@ struct PlanScreen: View {
             .id("plan-summary-\(p.version)-\(p.state)")
             .transition(reduceMotion ? .opacity : .scale(scale: 0.985, anchor: .top).combined(with: .opacity))
 
+        if let eventId = p.eventId, let feedback = p.feedback, feedback.eligible {
+            FeedbackBanner(eventId: eventId, state: feedback, onChanged: { Task { await load() } })
+        }
+
         let moved = changes(p)
         if !moved.isEmpty {
             Card {

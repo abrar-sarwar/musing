@@ -1,5 +1,6 @@
 import { serverDb } from "@/lib/db/server";
 import { discover } from "@/lib/discover";
+import { affinityFor } from "@/lib/hangouts";
 import { converge, type SignalCandidate } from "@/lib/muse/converge";
 import type { Matched } from "@/lib/muse/match";
 import { understand, UnderstandSchema } from "@/lib/muse/understand";
@@ -133,6 +134,7 @@ export async function convergeOnSignal(museId: string): Promise<ConvergeOutcome>
     budgetHint: understood.data.budget_hint,
     starterFree: owner.free_windows,
     context: null,
+    affinity: await affinityFor(owner.id),
   });
 
   const r = await converge({

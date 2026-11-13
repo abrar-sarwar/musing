@@ -91,6 +91,7 @@ struct PlanView: Decodable, Identifiable {
     // optional so an older server still decodes.
     let expiresAt: String?
     let completed: Bool?
+    let feedback: FeedbackState?
     /// ideas for the "what if..." box that fit this plan
     let whatIfs: [String]?
     let updatedAt: String?
@@ -130,6 +131,8 @@ struct SignalView: Decodable, Identifiable {
     let planState: String?
     let inCount: Int
     let joined: Bool
+    let eventId: String?
+    let feedback: FeedbackState?
 }
 
 // a catalog record a plan uses. fictional mock data, never anyone's private activity.
@@ -317,15 +320,80 @@ struct SendResult: Decodable {
 }
 
 struct EventRow: Decodable, Identifiable {
+    struct Feedback: Decodable {
+        let eligible: Bool
+        let memoryId: String?
+        let rating: Int?
+        let prompt: Bool
+        let notification: Bool
+    }
     let id: String
     let planId: String?
+    let visibility: String
+    let title: String
+    let description: String?
+    let startsAt: String?
+    let completesAt: String?
+    let location: String?
+    let posterUrl: String?
+    let host: Person
+    let attendeeCount: Int
+    let interestedCount: Int
+    let rsvp: String?
+    let rsvpLocked: Bool
+    let canRsvp: Bool
+    let completed: Bool
+    let feedback: Feedback
+}
+
+struct FeedbackState: Decodable {
+    let eligible: Bool
+    let memoryId: String?
+    let rating: Int?
+    let prompt: Bool
+    let notification: Bool
+}
+
+struct DemoClock: Decodable { let offsetSeconds: Int; let now: String }
+struct EventsResponse: Decodable { let events: [EventRow]; let demoClock: DemoClock }
+struct EventResponse: Decodable { let event: EventRow; let demoClock: DemoClock }
+
+struct MemoryEvent: Decodable {
+    let id: String
     let title: String
     let description: String?
     let startsAt: String?
     let location: String?
-    let posterUrl: String?
-    let host: User
+    let planId: String?
+    let host: Person
+    let attendeeCount: Int
+    let crew: [Person]?
 }
+
+struct MemoryPhoto: Decodable, Identifiable {
+    let id: String
+    let position: Int
+    let state: String
+    let width: Int
+    let height: Int
+    let url: String?
+}
+
+struct HangoutMemory: Decodable, Identifiable {
+    let id: String
+    let eventId: String
+    let rating: Int
+    let tags: [String]
+    let privateNote: String?
+    let event: MemoryEvent
+    let photos: [MemoryPhoto]
+    let createdAt: String
+    let updatedAt: String
+}
+
+struct MemoriesResponse: Decodable { let memories: [HangoutMemory] }
+struct MemoryResponse: Decodable { let memory: HangoutMemory }
+struct PhotoReservation: Decodable { let photoId: String; let path: String; let token: String; let uploadUrl: String }
 
 struct MuseTrace: Decodable, Identifiable {
     let id: Int

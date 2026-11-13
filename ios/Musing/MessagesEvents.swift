@@ -7,8 +7,6 @@ func formatEventDate(_ iso: String?) -> String {
     return "\(d.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day())) at \(d.formatted(.dateTime.hour().minute()))"
 }
 
-private let eventQuery = "select=*,host:users!events_host_id_fkey(*)"
-
 // ---------- the facebook events look, shared by events, signals and plans ----------
 
 /// a facebook-style event card: cover, date in the accent color, title, place, counts, then
@@ -172,7 +170,7 @@ struct EventsScreen: View {
     @ViewBuilder private var yours: some View {
         ForEach(events) { ev in
             EventStyleCard(topic: ev.title, kicker: ev.planId == nil ? nil : "MADE WITH MUSING.", date: formatEventDate(ev.startsAt), title: ev.title,
-                           place: ev.location ?? "Location to be announced", counts: "Hosted by \(ev.host.name)") {
+                           place: ev.location ?? "Location to be announced", counts: "Hosted by \(ev.host.name) · \(ev.attendeeCount) going") {
                 HStack(spacing: 8) {
                     EventPill(icon: "calendar", label: "See event", primary: true) { app.push(.event(ev.id)) }
                     ShareLink(item: "\(ev.title) · \(formatEventDate(ev.startsAt))") { EventPillLabel(icon: "arrowshape.turn.up.right", label: "Share") }
@@ -205,9 +203,9 @@ struct EventsScreen: View {
         if app.catalog == nil { await app.loadCatalog() }
         if let f: EventFeed = try? await API.get("/api/events/recommended", user: app.userId), !Task.isCancelled { feed = f.events }
         do {
-            let rows: [EventRow] = try await Supa.select("events", "\(eventQuery)&order=starts_at.asc")
+            let response: EventsResponse = try await API.get("/api/events", user: app.userId)
             guard !Task.isCancelled else { return }
-            events = rows
+            events = response.events
             status = "No events yet."
         } catch let e {
             guard !Task.isCancelled else { return }
@@ -221,17 +219,16 @@ struct EventDetailScreen: View {
     let eventId: String
     @State private var event: EventRow?
     @State private var status = "Loading…"
+    @State private var busy: String?
 
     var body: some View {
         SubScreen(title: "Event") {
             if let ev = event {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
-                        if let poster = ev.posterUrl, let url = API.absoluteURL(poster) {
+                        if let poster = ev.posterUrl {
                             // the poster lands about a minute after the plan becomes real
-                            AsyncImage(url: url, transaction: Transaction(animation: .easeIn(duration: 0.3))) { phase in
-                                if let image = phase.image { image.resizable().scaledToFill() } else { Rectangle().fill(Muse.gradient) }
-                            }
+                            AuthorizedServerImage(path: poster, user: app.userId)
                             .frame(maxWidth: .infinity).aspectRatio(1, contentMode: .fit).clipped()
                         } else {
                             Rectangle().fill(Muse.gradient).aspectRatio(16 / 9, contentMode: .fit)
@@ -252,13 +249,17 @@ struct EventDetailScreen: View {
                                 Text("Hosted by \(ev.host.name)").font(.system(size: 15)).foregroundStyle(FB.muted)
                             }
                             HStack(spacing: 8) {
-                                chip("checkmark.circle.fill", "Going", primary: true)
-                                chip("star", "Interested")
-                                chip("arrowshape.turn.up.right", "Share")
+                                rsvpChip("checkmark.circle.fill", "Going", status: "going")
+                                rsvpChip("star", "Interested", status: "interested")
+                                ShareLink(item: "\(ev.title) · \(formatEventDate(ev.startsAt))") { EventPillLabel(icon: "arrowshape.turn.up.right", label: "Share") }
                             }
                             .padding(.top, 8)
+                            Text("\(ev.attendeeCount) going · \(ev.interestedCount) interested").font(.system(size: 13)).foregroundStyle(FB.muted)
+                            if ev.rsvpLocked { Text("Your Going RSVP came from the confirmed plan.").font(.system(size: 13)).foregroundStyle(FB.muted) }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading).padding(16).background(Color.white)
+                        FeedbackBanner(eventId: ev.id, state: FeedbackState(eligible: ev.feedback.eligible, memoryId: ev.feedback.memoryId, rating: ev.feedback.rating, prompt: ev.feedback.prompt, notification: ev.feedback.notification), onChanged: { Task { await load() } })
+                            .padding(12).background(FB.bg2)
                         if let about = ev.description {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("About").font(.system(size: 17, weight: .bold)).foregroundStyle(FB.text)
@@ -280,9 +281,9 @@ struct EventDetailScreen: View {
 
     private func load() async {
         do {
-            let rows: [EventRow] = try await Supa.select("events", "\(eventQuery)&id=eq.\(eventId)")
+            let response: EventResponse = try await API.get("/api/events/\(eventId)", user: app.userId)
             guard !Task.isCancelled else { return }
-            event = rows.first
+            event = response.event
             status = "Event not found."
         } catch let e {
             guard !Task.isCancelled else { return }
@@ -290,12 +291,36 @@ struct EventDetailScreen: View {
         }
     }
 
-    private func chip(_ icon: String, _ label: String, primary: Bool = false) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: icon).font(.system(size: 14))
-            Text(label).font(.system(size: 14, weight: .semibold))
+    private func rsvpChip(_ icon: String, _ label: String, status: String) -> some View {
+        let selected = event?.rsvp == status
+        return EventPill(icon: icon, label: label, primary: selected, busy: busy == status) {
+            guard event?.canRsvp == true else {
+                if event?.rsvpLocked == true { toast("Your attendance is locked by the confirmed plan.") }
+                else if event?.completed == true { toast("This event is complete.") }
+                return
+            }
+            busy = status
+            Task {
+                do {
+                    let body: [String: Any] = ["status": selected ? NSNull() : status]
+                    let response: EventResponse = try await API.put("/api/events/\(eventId)/rsvp", user: app.userId, body: body)
+                    event = response.event
+                } catch let e { toast(errorText(e)) }
+                busy = nil
+            }
         }
-        .foregroundStyle(primary ? Color.white : FB.text).frame(maxWidth: .infinity).frame(height: 38)
-        .background(primary ? FB.blue : FB.input, in: RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+private struct AuthorizedServerImage: View {
+    let path: String
+    let user: String
+    @State private var image: UIImage?
+    var body: some View {
+        Group { if let image { Image(uiImage: image).resizable().scaledToFill() } else { Rectangle().fill(Muse.gradient) } }
+            .task(id: "\(user)-\(path)") {
+                guard path.hasPrefix("/") else { return }
+                if let data = try? await API.data("GET", path, user: user), let loaded = UIImage(data: data) { withAnimation(.easeIn(duration: 0.3)) { image = loaded } }
+            }
     }
 }

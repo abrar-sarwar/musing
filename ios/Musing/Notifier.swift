@@ -52,7 +52,7 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         UNUserNotificationCenter.current().delegate = self
         let nc = NotificationCenter.default
         observers.append(nc.addObserver(forName: .tableChanged, object: nil, queue: .main) { [weak self] note in
-            guard let table = note.object as? String, table == "plans" || table == "thread_pings" else { return }
+            guard let table = note.object as? String, table == "plans" || table == "thread_pings" || table == "events" || table == "app_settings" else { return }
             Task { @MainActor in self?.changed() }
         })
         observers.append(nc.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { [weak self] _ in
@@ -79,9 +79,10 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
             guard ready else { seen = Set(items.map(\.id)); ready = true; return }
             let fresh = items.filter { !seen.contains($0.id) }
             seen.formUnion(items.map(\.id))
-            // with the app open, the screens already update live
-            guard UIApplication.shared.applicationState != .active else { return }
-            for (i, item) in fresh.enumerated() { post(item, badge: i + 1) }
+            // Feedback is the demo's post-hangout moment, so it may present once in the
+            // foreground after Developer advances time. Other live updates stay quiet.
+            let deliver = UIApplication.shared.applicationState == .active ? fresh.filter { $0.id.hasPrefix("feedback-") } : fresh
+            for (i, item) in deliver.enumerated() { post(item, badge: i + 1) }
         }
     }
 
@@ -96,8 +97,9 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     private func current(for user: String) async -> [Item]? {
         async let homeTask: MusingHome? = try? API.get("/api/musing/home", user: user)
         async let threadsTask: ThreadList? = try? API.get("/api/threads", user: user)
-        let (home, threads) = await (homeTask, threadsTask)
-        if home == nil && threads == nil { return nil }
+        async let eventsTask: EventsResponse? = try? API.get("/api/events", user: user)
+        let (home, threads, events) = await (homeTask, threadsTask, eventsTask)
+        if home == nil && threads == nil && events == nil { return nil }
         var items: [Item] = []
         // the same rows the notifications tab shows, so the two never disagree
         for row in musingRows(home, me: user) where !row.id.hasSuffix("-draft") {
@@ -108,6 +110,9 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
             guard let last = t.last, last.senderId != user, !last.pending else { continue }
             let text = (last.body ?? "sent a plan").trimmingCharacters(in: .whitespacesAndNewlines)
             items.append(Item(id: "msg-\(last.id)", title: t.title, body: last.senderId == nil ? "muse: \(text)" : text, link: "musing://messages/\(t.id)"))
+        }
+        for event in events?.events ?? [] where event.feedback.notification {
+            items.append(Item(id: "feedback-\(event.id)", title: "How was it?", body: "Rate \(event.title) and save a private memory.", link: "musing://events/\(event.id)"))
         }
         return items
     }

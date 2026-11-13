@@ -61,7 +61,7 @@ COORDINATE — Private preferences and “what if...” counteroffers change the
 
 COMMIT — Once opt-in quorum is met, reveal approved attendees and create mock Event/Messenger handoff (only after a user tap).
 
-MAKE SOMETHING — Generate an invite card/poster and, after the experience, an optional shared recap with “run it back.”
+MAKE SOMETHING — Generate an invite card/poster and, after the experience, let each attendee privately rate it and keep a personal Memory. Any future sharing or “run it back” action is separate and explicit; a rating never creates a shared recap.
 
 One output across entry points: a living plan card with activity, why these friends, date/time, proposed place or event, relevant Facebook opportunities, quorum and next action.
 
@@ -106,7 +106,15 @@ The starter sees “1 of 3 down,” not the names of those who accepted until th
 
 **“what if...” and shared artifacts**
 
-A counteroffer—“what if sunday?”—triggers a visibly different re-solved plan. With consent, Muse makes a collaborative invite, event concept, outfit board, mini itinerary or recap. “run it back” creates a new draft rather than auto-inviting.
+A counteroffer—“what if sunday?”—triggers a visibly different re-solved plan. With consent, Muse makes a collaborative invite, event concept, outfit board or mini itinerary. A later private Memory belongs to one attendee; any future shared recap or “run it back” action is separate, explicit and never auto-invites.
+
+**Post-hangout feedback and private Memories**
+
+Two hours after a scheduled hangout starts, only people recorded as Going can rate it. The private response is 1–5 stars, up to four structured tags, an optional note and up to five photos. It creates or updates one personal Memory for that attendee; it is not shown to the crew, posted to Facebook or used to choose friends.
+
+Structured stars and tags may tune seeded Events, Groups, Marketplace and Reels ranking. Activity and repeat tags tune grounded topics; place, timing and value tags tune only their matching facets. Crew tags remain archival. Muse never interprets the private note, low ratings only down-rank rather than erase candidates, and explicit Muse intent remains primary.
+
+Memories are a private in-app archive styled after a Facebook surface, not a live Facebook integration. A standalone event Memory identifies its host and attendee count but not the other attendees. Uploaded photos take precedence over catalog art, remain in private Storage and are served only with short-lived signed links.
 
 **07  What Muse actually does**
 
@@ -133,7 +141,7 @@ Never identify who watched a topic or why a specific person is unavailable. Do n
 
 No persistent location tracking or exact distance computation. Public places for expanded-group plans.
 
-Muse can propose, rank and draft. Sending invitations, joining groups, contacting sellers, publishing recaps and creating Events each require explicit user action.
+Muse can propose, rank and draft. Sending invitations, joining groups, contacting sellers, sharing Memories and creating Events each require explicit user action. Private feedback is never published automatically.
 
 Blocked sensitive suggestion areas and controls for visibility, dismissal, expiry and Muse-off; no pressure-based notifications.
 
@@ -149,6 +157,7 @@ Status terminology: “core proposed” \= essential to build; “stretch” \= 
 | P0 / core proposed | One Facebook integration: thrift Event \+ Marketplace opportunity | Seeded events/listings appear with relevant IDs and reasons. |
 | P1 / stretch | Group/community recommendations \+ Reels inspiration | Consent-gated contextual action card and group/event match. |
 | P1 / stretch | Mock Messenger/Event handoff \+ Muse image invite | Explicit confirm creates visible handoff artifacts. |
+| P1 / core proposed | Post-hangout feedback \+ private Memories | Going attendee can time-skip the demo, rate after completion and see an owner-only Memory without exposing it to friends. |
 | P1 / stretch | Muse off \+ trace panel | Without Muse the flow collapses to manual poll mechanics. |
 | P2 / mock only | Feed recap, multiple group modes, broader Marketplace journeys | Static or scripted exploratory screens; clearly labeled. |
 
@@ -166,7 +175,9 @@ Jo privately signals a spending limit and suggests Sunday; Muse re-solves the pl
 
 Threshold reached; users confirm. A mock Facebook Event, Messenger conversation and generated invite poster appear.
 
-Show the Facebook-native value chain: Reel → friends → Event/Marketplace → Messenger → shared experience. Then demonstrate “muse off” to prove AI adds value.
+For the demo, advance the shared server clock just past the event’s two-hour completion point. The Going attendee receives one “How was it?” prompt, saves private feedback and opens the personal Memory; another user cannot access it.
+
+Show the Facebook-native value chain: Reel → friends → Event/Marketplace → Messenger → shared experience → private Memory. Then demonstrate “muse off” to prove AI adds value. Every named Facebook surface remains seeded or mock in-app behavior unless approved live access is separately verified.
 
 Presentation window from the original brief: 8 minutes (problem, working demo, AI role/tradeoffs, Q\&A). Keep the live path tight; every additional surface should support the same story rather than create a second product.
 

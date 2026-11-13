@@ -30,6 +30,7 @@ struct RootView: View {
                     case .thread(let id): ThreadScreen(threadId: id)
                     case .events: EventsScreen()
                     case .event(let id): EventDetailScreen(eventId: id)
+                    case .memory(let id): MemoryDetailScreen(memoryId: id)
                     case .listing(let id): ListingScreen(listingId: id)
                     case .person(let id): PersonScreen(personId: id)
                     case .musing(let compose, let tab): MusingScreen(compose: compose, tab: tab)
@@ -101,6 +102,7 @@ struct RootView: View {
         case "search": app.path = [.search]
         case "messages": app.path = arg.map { [.messages, .thread($0)] } ?? [.messages]
         case "events": app.path = arg.map { [.events, .event($0)] } ?? [.events]
+        case "memory": if let arg { app.path = [.memory(arg)] }
         case "listing": if let arg { app.path = [.listing(arg)] }
         case "people": if let arg { app.path = [.person(arg)] }
         case "plan": if let arg { app.path = [.musing(compose: false, tab: .plans), .plan(arg)] }

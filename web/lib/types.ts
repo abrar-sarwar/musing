@@ -176,6 +176,7 @@ export type PlanView = {
   waitFor: number; // the same number, as the starter chose it
   expiresAt: string | null;
   completed: boolean; // it happened: it's real and its start time has passed
+  feedback: { eligible: boolean; memoryId: string | null; rating: number | null; prompt: boolean; notification: boolean } | null;
   // ideas for the "what if..." box, built from this plan and this viewer's free time. empty unless the plan is open.
   whatIfs: string[];
   invited: number;
@@ -220,6 +221,8 @@ export type SignalView = {
   planState: PlanState | null;
   inCount: number;
   joined: boolean;
+  eventId: string | null;
+  feedback: PlanView["feedback"];
 };
 
 export type Suggestion = { suggestion: string; why: string; source: "live" | "cache" };

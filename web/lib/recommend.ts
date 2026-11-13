@@ -2,6 +2,7 @@ import { serverDb } from "@/lib/db/server";
 import { eligible, topicsFor, type PublicEvent } from "@/lib/discover";
 import type { FreeWindow, ReelsTopic } from "@/lib/types";
 import { isDay, isFreeAt } from "@/lib/when";
+import { affinityScore, EMPTY_AFFINITY, type Affinity } from "@/lib/feedback";
 
 // the reels rule, in one place: what opted-in friends are into, counted by distinct friends
 // first and summed score second, and never surfaced below FLOOR friends. the reels card asks
@@ -58,7 +59,7 @@ export const topicKeys = (topic: string): string[] => {
 
 /** why an event was recommended. a friend count is only ever FLOOR or more. */
 export type Because = { kind: "friends"; topic: string; count: number } | { kind: "interest"; topic: string } | { kind: "free" } | null;
-export type RecommendedEvent = { event: PublicEvent; because: Because };
+export type RecommendedEvent = { event: PublicEvent; because: Because; personal: number };
 export type Viewer = { interests: string[]; free_windows: FreeWindow[] };
 
 /**
@@ -67,7 +68,7 @@ export type Viewer = { interests: string[]; free_windows: FreeWindow[] };
  * FLOOR friends adds nothing, so a quiet friend never moves the list. after that the viewer's
  * own interests, then whether they are free then, then the catalog's curated order.
  */
-export function recommendEvents(events: PublicEvent[], rows: ReelsTopic[], viewer: Viewer): RecommendedEvent[] {
+export function recommendEvents(events: PublicEvent[], rows: ReelsTopic[], viewer: Viewer, affinity: Affinity = EMPTY_AFFINITY): RecommendedEvent[] {
   const t = tally(rows, topicKeys);
   const mine = new Set(topicsFor(...viewer.interests));
   const pool = eligible({ events, groups: [], listings: [], reels: [] }).events;
@@ -79,10 +80,15 @@ export function recommendEvents(events: PublicEvent[], rows: ReelsTopic[], viewe
       const interest = event.tags.find((tag) => mine.has(tag));
       const free = isDay(event.when_day) && isFreeAt(viewer.free_windows, event.when_day, event.when_time);
       const because: Because = top ? { kind: "friends", topic: top.topic, count: friends.size } : interest ? { kind: "interest", topic: interest } : free ? { kind: "free" } : null;
-      return { event, because, count: friends.size, score: loud.reduce((n, x) => n + x.hit!.score, 0), interests: event.tags.filter((tag) => mine.has(tag)).length, free };
+      const hour = Number(event.when_time.slice(0, 2));
+      const daypart = hour < 12 ? "morning" : hour < 17 ? "afternoon" : hour < 22 ? "evening" : "night";
+      const amount = event.price ?? 0;
+      const price = amount === 0 ? "free" : amount <= 20 ? "low" : amount <= 50 ? "medium" : "high";
+      const personal = affinityScore(affinity, event.tags, { area: event.area.trim().toLowerCase(), daypart, price });
+      return { event, because, personal, count: friends.size, score: loud.reduce((n, x) => n + x.hit!.score, 0), interests: event.tags.filter((tag) => mine.has(tag)).length, free };
     })
-    .sort((a, b) => byStrength(a, b) || b.interests - a.interests || Number(b.free) - Number(a.free) || (a.event.sort ?? 100) - (b.event.sort ?? 100) || a.event.id.localeCompare(b.event.id))
-    .map(({ event, because }) => ({ event, because }));
+    .sort((a, b) => b.personal - a.personal || byStrength(a, b) || b.interests - a.interests || Number(b.free) - Number(a.free) || (a.event.sort ?? 100) - (b.event.sort ?? 100) || a.event.id.localeCompare(b.event.id))
+    .map(({ event, because, personal }) => ({ event, because, personal }));
 }
 
 // what doing this event together sounds like. the title is read first, since it is the most

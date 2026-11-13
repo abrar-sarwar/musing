@@ -1,6 +1,7 @@
 import { serverDb } from "@/lib/db/server";
 import type { FreeWindow } from "@/lib/types";
 import { isDay, isFreeAt } from "@/lib/when";
+import { affinityScore, EMPTY_AFFINITY, type Affinity } from "@/lib/feedback";
 
 // opportunity discovery. plain, fast lookups over the fictional catalog (public events,
 // groups, marketplace listings, reels). these run before muse is called: muse only ever
@@ -150,10 +151,10 @@ const hits = (tokens: string[], title: string, tags: string[]) => {
   const have = new Set([...words(title), ...tags.filter((t) => !(t in TOPICS)).flatMap((t) => words(t))]);
   return tokens.filter((t) => have.has(t)).length;
 };
-function top<T extends { id: string; sort?: number }>(scored: Array<{ r: T; score: number }>, limit: number): T[] {
+function top<T extends { id: string; sort?: number }>(scored: Array<{ r: T; score: number; personal?: number }>, limit: number): T[] {
   return scored
     .filter((x) => x.score > 0)
-    .sort((a, b) => b.score - a.score || (a.r.sort ?? 100) - (b.r.sort ?? 100) || a.r.id.localeCompare(b.r.id))
+    .sort((a, b) => b.score - a.score || (b.personal ?? 0) - (a.personal ?? 0) || (a.r.sort ?? 100) - (b.r.sort ?? 100) || a.r.id.localeCompare(b.r.id))
     .slice(0, limit)
     .map((x) => x.r);
 }
@@ -183,7 +184,10 @@ export function setCatalog(data: Catalog | null): void {
   cache = data ? { at: Number.MAX_SAFE_INTEGER, data } : null;
 }
 
-type Who = { starterFree: FreeWindow[]; interests?: string[]; memberOf?: string[] };
+type Who = { starterFree: FreeWindow[]; interests?: string[]; memberOf?: string[]; affinity?: Affinity };
+
+const priceFacet = (amount: number) => amount === 0 ? "free" : amount <= 20 ? "low" : amount <= 50 ? "medium" : "high";
+const partFacet = (time: string) => time < "12:00" ? "morning" : time < "17:00" ? "afternoon" : time < "22:00" ? "evening" : "night";
 
 /** public events for this intent that the starter could actually make */
 export function searchEvents(c: Catalog, intent: Intent, who: Who, limit = 3): PublicEvent[] {
@@ -200,7 +204,7 @@ export function searchEvents(c: Catalog, intent: Intent, who: Who, limit = 3): P
   if (intent.part === "morning" && pool.some((ev) => ev.when_time < "12:00")) pool = pool.filter((ev) => ev.when_time < "12:00");
   const scored = pool.map((ev) => {
     const base = overlap(ev.tags, intent.topics);
-    if (base === 0) return { r: ev, score: 0 };
+    if (base === 0) return { r: ev, score: 0, personal: 0 };
     const price = ev.price ?? 0;
     return {
       r: ev,
@@ -208,6 +212,7 @@ export function searchEvents(c: Catalog, intent: Intent, who: Who, limit = 3): P
         + (ev.tags.some((t) => mine.includes(t)) ? (generic ? 2 : 0.5) : 0)
         + (intent.cheap ? (price === 0 ? 1 : price <= 15 ? 0.5 : price > 30 ? -1 : 0) : 0)
         + (intent.today && ev.when_day === intent.today ? 1 : 0),
+      personal: affinityScore(who.affinity ?? EMPTY_AFFINITY, ev.tags, { area: ev.area.trim().toLowerCase(), daypart: partFacet(ev.when_time), price: priceFacet(price) }),
     };
   });
   if (!generic) return top(scored, limit);
@@ -220,17 +225,17 @@ export function searchGroups(c: Catalog, intent: Intent, who: Who, limit = 2): G
   const topics = intent.topics.filter((t) => t !== FALLBACK);
   return top(eligible(c, who.memberOf).groups.map((g) => {
     const base = overlap(g.tags, topics);
-    return { r: g, score: base === 0 ? 0 : base + 1.5 * hits(intent.tokens, g.name, g.tags) };
+    return { r: g, score: base === 0 ? 0 : base + 1.5 * hits(intent.tokens, g.name, g.tags), personal: affinityScore(who.affinity ?? EMPTY_AFFINITY, g.tags, { area: g.area.trim().toLowerCase() }) };
   }), limit);
 }
 
 /** listings for this intent. a stated budget drops anything over it; "cheap" puts cheaper first. */
-export function searchListings(c: Catalog, intent: Intent, limit = 4): Listing[] {
+export function searchListings(c: Catalog, intent: Intent, limit = 4, affinity: Affinity = EMPTY_AFFINITY): Listing[] {
   const topics = intent.topics.filter((t) => !NOT_SHOPPING.has(t));
   return top(eligible(c).listings.filter((l) => intent.budget === null || l.price <= intent.budget).map((l) => {
     const named = hits(intent.tokens, l.title, l.tags);
     const base = overlap(l.tags, topics) + 2 * named;
-    return { r: l, score: base === 0 ? 0 : base + (intent.cheap || intent.free ? (l.price <= 40 ? 1 : l.price <= 80 ? 0.5 : l.price > 150 ? -1 : 0) : 0) };
+    return { r: l, score: base === 0 ? 0 : base + (intent.cheap || intent.free ? (l.price <= 40 ? 1 : l.price <= 80 ? 0.5 : l.price > 150 ? -1 : 0) : 0), personal: affinityScore(affinity, l.tags, { area: l.place.split(",")[0]!.trim().toLowerCase(), price: priceFacet(l.price) }) };
   }), limit);
 }
 
@@ -309,6 +314,7 @@ export async function discover(input: {
   text: string; activity: string; budgetHint: string; starterFree: FreeWindow[]; context: SignalContext | null;
   /** the starter's own interests. they break ties and shape a vague ask, never override a specific one. */
   interests?: string[];
+  affinity?: Affinity;
   /** groups the starter is in, so a private group of theirs can be found */
   memberOf?: string[];
   now?: Date;
@@ -321,13 +327,13 @@ export async function discover(input: {
   const intent = readIntent(input.text, [input.activity, reel ? reel.topic : ctx?.kind === "reel" ? ctx.id : null], input.now);
   intent.topics = [...new Set([...(seed?.tags ?? []), ...(reel?.tags ?? []), ...intent.topics])];
   intent.budget = intent.budget ?? budgetIn(input.budgetHint);
-  const who: Who = { starterFree: input.starterFree, interests: input.interests, memberOf: input.memberOf };
+  const who: Who = { starterFree: input.starterFree, interests: input.interests, memberOf: input.memberOf, affinity: input.affinity };
   const first = <T extends { id: string }>(rows: T[], pinned: T | undefined, limit: number) => (pinned ? [pinned, ...rows.filter((r) => r.id !== pinned.id)] : rows).slice(0, limit);
   return {
     topics: intent.topics,
     events: first(searchEvents(c, intent, who), ctx?.kind === "event" ? (seed as PublicEvent | undefined) : undefined, 3),
     groups: first(searchGroups(c, intent, who), ctx?.kind === "group" ? (seed as Group | undefined) : undefined, 2),
-    listings: first(searchListings(c, intent), ctx?.kind === "listing" ? (seed as Listing | undefined) : undefined, 4),
+    listings: first(searchListings(c, intent, 4, input.affinity ?? EMPTY_AFFINITY), ctx?.kind === "listing" ? (seed as Listing | undefined) : undefined, 4),
   };
 }
 

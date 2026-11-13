@@ -332,6 +332,9 @@ struct SignalCard: View {
                 Text(signal.text).font(.system(size: 17, weight: .semibold)).foregroundStyle(FB.text).fixedSize(horizontal: false, vertical: true)
                 Text(meta).font(UI.meta).foregroundStyle(FB.muted)
                 strip
+                if let eventId = signal.eventId, let feedback = signal.feedback, feedback.eligible {
+                    FeedbackBanner(eventId: eventId, state: feedback)
+                }
                 if signal.mine {
                     EventPill(icon: "calendar.badge.plus", label: "Create event", busy: making) { confirming = true }
                 }

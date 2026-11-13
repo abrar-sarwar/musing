@@ -10,6 +10,7 @@ import { canSeeSignal, isExpired, outcome, parseAudience, quorumFor, type Audien
 import type { MemberStatus, Muse, MusingHome, Person, Plan, PlanMember, PlanView, SignalView, User } from "@/lib/types";
 import { suggestWhatIfs, usableAreas } from "@/lib/whatif";
 import { isDay, isFreeAt, isTime, nextOccurrence, todayLine } from "@/lib/when";
+import { getDemoClock } from "@/lib/demoTime";
 
 // the plan engine. every rule about who may see what lives in this file.
 
@@ -76,9 +77,18 @@ async function buildView(b: Bundle, viewerId: string): Promise<PlanView | null> 
 
   // it happened: real, and the start time is behind us
   let completed = false;
+  let feedback: PlanView["feedback"] = null;
   if (happening && plan.event_id) {
-    const { data: ev } = await serverDb().from("events").select("starts_at").eq("id", plan.event_id).maybeSingle();
-    completed = Boolean(ev?.starts_at) && Date.parse(ev!.starts_at as string) < Date.now();
+    const db = serverDb();
+    const [{ data: ev }, clock, { data: rsvp }, { data: memory }] = await Promise.all([
+      db.from("events").select("starts_at").eq("id", plan.event_id).maybeSingle(),
+      getDemoClock(),
+      db.from("event_rsvps").select("status").eq("event_id", plan.event_id).eq("user_id", viewerId).maybeSingle(),
+      db.from("hangout_memories").select("id,rating").eq("event_id", plan.event_id).eq("user_id", viewerId).maybeSingle(),
+    ]);
+    completed = Boolean(ev?.starts_at) && Date.parse(ev!.starts_at as string) + 2 * 60 * 60 * 1000 <= Date.parse(clock.now);
+    const eligible = completed && rsvp?.status === "going";
+    feedback = { eligible, memoryId: (memory?.id as string | undefined) ?? null, rating: (memory?.rating as number | undefined) ?? null, prompt: eligible && !memory, notification: eligible && !memory };
   }
 
   let privateLimit: string | null = null;
@@ -106,6 +116,7 @@ async function buildView(b: Bundle, viewerId: string): Promise<PlanView | null> 
     waitFor: plan.quorum,
     expiresAt: plan.expires_at ?? null,
     completed,
+    feedback,
     whatIfs: plan.state === "proposing" && plan.muse_on ? await whatIfsFor(plan, users.get(viewerId) ?? null) : [],
     invited: members.length,
     downCount: down.length,
@@ -265,6 +276,25 @@ async function signalsFor(viewerId: string, own: Muse[]): Promise<{ signals: Sig
     db.from("users").select("*").in("id", [...new Set(all.map((m) => m.user_id))]),
   ]);
   const people = new Map(((authors ?? []) as User[]).map((u) => [u.id, u]));
+  const realPlans = [...plans.values()].filter((p) => p.event_id);
+  const eventIds = realPlans.map((p) => p.event_id as string);
+  const feedbackByPlan = new Map<string, PlanView["feedback"]>();
+  if (eventIds.length > 0) {
+    const [{ data: eventRows }, { data: rsvpRows }, { data: memoryRows }, clock] = await Promise.all([
+      db.from("events").select("id,starts_at").in("id", eventIds),
+      db.from("event_rsvps").select("event_id,status").eq("user_id", viewerId).in("event_id", eventIds),
+      db.from("hangout_memories").select("id,event_id,rating").eq("user_id", viewerId).in("event_id", eventIds),
+      getDemoClock(),
+    ]);
+    for (const plan of realPlans) {
+      const event = (eventRows ?? []).find((e) => e.id === plan.event_id);
+      const rsvp = (rsvpRows ?? []).find((r) => r.event_id === plan.event_id);
+      const memory = (memoryRows ?? []).find((m) => m.event_id === plan.event_id);
+      const done = Boolean(event?.starts_at) && Date.parse(event!.starts_at as string) + 2 * 60 * 60 * 1000 <= Date.parse(clock.now);
+      const eligible = done && rsvp?.status === "going";
+      feedbackByPlan.set(plan.id, { eligible, memoryId: (memory?.id as string | undefined) ?? null, rating: (memory?.rating as number | undefined) ?? null, prompt: eligible && !memory, notification: eligible && !memory });
+    }
+  }
 
   const shape = (m: Muse): SignalView | null => {
     const author = people.get(m.user_id);
@@ -292,6 +322,8 @@ async function signalsFor(viewerId: string, own: Muse[]): Promise<{ signals: Sig
       planState: plan && (mine || (sent && onPlan)) ? plan.state : null,
       inCount: inIds.length,
       joined: !mine && (keen.includes(viewerId) || inIds.includes(viewerId)),
+      eventId: plan?.event_id ?? null,
+      feedback: plan ? feedbackByPlan.get(plan.id) ?? null : null,
     };
   };
   const byNewest = (a: SignalView, b: SignalView) => b.createdAt.localeCompare(a.createdAt);
@@ -339,6 +371,13 @@ export async function joinSignal(museId: string, userId: string): Promise<{ plan
     throw new PlanError("signal not found", 404);
   }
   if (!plan || (plan.state !== "proposing" && plan.state !== "happening")) return { planId: null, settled: null };
+  if (plan.state === "happening" && plan.event_id) {
+    const [{ data: event }, clock] = await Promise.all([
+      db.from("events").select("starts_at").eq("id", plan.event_id).maybeSingle(),
+      getDemoClock(),
+    ]);
+    if (event?.starts_at && Date.parse(event.starts_at as string) + 2 * 60 * 60 * 1000 <= Date.parse(clock.now)) throw new PlanError("this plan is complete", 409);
+  }
   await addAsDown(plan.id, [userId]);
   if (plan.state === "happening" && plan.thread_id) await syncThreadMembers(plan.id, plan.thread_id, plan.starter_id);
   return { planId: plan.id, settled: await settle(plan.id) };
@@ -505,6 +544,13 @@ export async function respond(planId: string, userId: string, status: Extract<Me
   // a draft doesn't exist as far as anyone but the starter is concerned
   if (!mine || b.plan.state === "draft") throw new PlanError("plan not found", 404);
   if (b.plan.state !== "proposing" && b.plan.state !== "happening") throw new PlanError("this plan isn't open", 409);
+  if (b.plan.state === "happening" && b.plan.event_id) {
+    const [{ data: event }, clock] = await Promise.all([
+      db.from("events").select("starts_at").eq("id", b.plan.event_id).maybeSingle(),
+      getDemoClock(),
+    ]);
+    if (event?.starts_at && Date.parse(event.starts_at as string) + 2 * 60 * 60 * 1000 <= Date.parse(clock.now)) throw new PlanError("this plan is complete", 409);
+  }
 
   const now = new Date().toISOString();
   const { error } = await db.from("plan_members").update({ status, updated_at: now }).eq("plan_id", planId).eq("user_id", userId);

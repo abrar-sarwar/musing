@@ -49,7 +49,9 @@ struct ProfileView: View {
                 switch tab {
                 case "Photos": photos.padding(.top, 8)
                 case "Reels": reelsGrid
-                case "Memories": memory
+                case "Memories":
+                    if isSelf { MemoriesArchive() }
+                    else { Text("Memories are private.").foregroundStyle(FB.muted).padding(24) }
                 default: allTab
                 }
             }
@@ -279,19 +281,6 @@ struct ProfileView: View {
             }
             .padding(.top, 8)
         }
-    }
-
-    private var memory: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("On this day, 1 year ago").font(.system(size: 17, weight: .bold)).foregroundStyle(FB.text)
-            Pic(path: Mock.profilePhotos[3]).aspectRatio(4 / 3, contentMode: .fit).clipShape(RoundedRectangle(cornerRadius: 10))
-            Text("Golden hour at the reservoir with the whole crew.").font(.system(size: 16)).foregroundStyle(FB.text)
-            Button { toast("Sharing memories is mocked in this prototype.") } label: {
-                Text("Share").font(.system(size: 16, weight: .bold)).foregroundStyle(FB.text).frame(maxWidth: .infinity).frame(height: 40).background(FB.button, in: RoundedRectangle(cornerRadius: 8))
-            }
-            .buttonStyle(FadePress())
-        }
-        .padding(14)
     }
 
     private var editSheet: some View {
@@ -531,6 +520,8 @@ struct DeveloperScreen: View {
     @State private var testing = false
     @State private var apiResult: String?
     @State private var dbResult: String?
+    @State private var demoClock: DemoClock?
+    @State private var changingTime = false
     @FocusState private var focused: Bool
 
     var body: some View {
@@ -569,6 +560,26 @@ struct DeveloperScreen: View {
                     }
                     .padding(12).background(Color.white, in: RoundedRectangle(cornerRadius: 12))
 
+                    Text("Demo time").font(.system(size: 17, weight: .bold)).foregroundStyle(FB.text).padding(.top, 6)
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text(demoClock.map { $0.offsetSeconds == 0 ? "Real time" : "Advanced by \($0.offsetSeconds / 3600)h \(($0.offsetSeconds % 3600) / 60)m" } ?? "Loading…")
+                            .font(.system(size: 15, weight: .semibold)).foregroundStyle(FB.text)
+                        Text("Advance the shared server clock past this person's next Going hangout. Both phones, RSVP locks, the banner, and the one feedback notification update together.")
+                            .font(.system(size: 13)).foregroundStyle(FB.muted)
+                        HStack(spacing: 8) {
+                            Button { changeTime(next: true) } label: {
+                                Text(changingTime ? "Advancing…" : "Complete next hangout").font(.system(size: 14, weight: .bold)).foregroundStyle(.white)
+                                    .frame(maxWidth: .infinity).frame(height: 40).background(FB.blue, in: RoundedRectangle(cornerRadius: 8))
+                            }
+                            Button { changeTime(next: false) } label: {
+                                Text("Real time").font(.system(size: 14, weight: .bold)).foregroundStyle(FB.text)
+                                    .frame(maxWidth: .infinity).frame(height: 40).background(FB.input, in: RoundedRectangle(cornerRadius: 8))
+                            }
+                        }
+                        .buttonStyle(FadePress()).disabled(changingTime)
+                    }
+                    .padding(12).background(Color.white, in: RoundedRectangle(cornerRadius: 12))
+
                     Text("Connection").font(.system(size: 17, weight: .bold)).foregroundStyle(FB.text).padding(.top, 6)
                     VStack(alignment: .leading, spacing: 0) {
                         check("API server", Config.apiURL, apiResult)
@@ -585,7 +596,7 @@ struct DeveloperScreen: View {
             .background(FB.bg2)
             .scrollDismissesKeyboard(.interactively)
         }
-        .task { await test() }
+        .task { await test(); await loadClock() }
     }
 
     private func check(_ label: String, _ url: String, _ result: String?) -> some View {
@@ -624,6 +635,24 @@ struct DeveloperScreen: View {
         async let db = Self.reach(Config.supabaseURL + "/rest/v1/users?select=id&limit=1", key: Config.supabaseKey)
         (apiResult, dbResult) = await (api, db)
         testing = false
+    }
+
+    private func loadClock() async {
+        demoClock = try? await API.get("/api/demo/time", user: app.userId)
+    }
+
+    private func changeTime(next: Bool) {
+        changingTime = true
+        Task {
+            do {
+                let body: [String: Any] = next ? ["action": "next_feedback"] : ["offsetSeconds": 0]
+                let clock: DemoClock = try await API.post("/api/demo/time", user: app.userId, body: body)
+                demoClock = clock
+                app.version += 1
+                toast(next ? "Hangout completed. Feedback is ready." : "Demo clock reset.")
+            } catch let e { toast(errorText(e)) }
+            changingTime = false
+        }
     }
 
     private static func reach(_ url: String, key: String?) async -> String {

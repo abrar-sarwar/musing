@@ -8,7 +8,7 @@ enum AppTab: String, CaseIterable {
 enum MusingTab: String, Hashable { case send, signals, plans }
 
 enum Route: Hashable {
-    case search, menu, messages, thread(String), events, event(String), listing(String), person(String)
+    case search, menu, messages, thread(String), events, event(String), memory(String), listing(String), person(String)
     case musing(compose: Bool, tab: MusingTab = .send), plan(String), discoverTogether(String), musingSettings, nudge, recap
     case groups, group(String), publicEvent(String)
     case developer

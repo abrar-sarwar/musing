@@ -16,9 +16,11 @@ import {
   USERS,
 } from "./data";
 import { NEW_GROUP_MEMBERS, NEW_GROUPS, NEW_LISTINGS, NEW_PUBLIC_EVENTS, NEW_REELS } from "./catalog";
+import { clearMemoryStorage } from "../hangouts";
 
 // wipes every table and re-inserts the seed. used by scripts/seed.ts and POST /api/reset.
 export async function resetSeed(db: SupabaseClient): Promise<{ users: number; friendships: number }> {
+  await clearMemoryStorage();
   const { error: resetErr } = await db.rpc("reset_all");
   if (resetErr) throw new Error(`reset_all: ${resetErr.message}`);
 

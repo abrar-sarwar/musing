@@ -157,6 +157,21 @@ enum API {
         try decode(try await data("POST", path, user: user, body: body))
     }
 
+    static func put<T: Decodable>(_ path: String, user: String, body: [String: Any]? = nil) async throws -> T {
+        try decode(try await data("PUT", path, user: user, body: body))
+    }
+
+    static func uploadJPEG(_ bytes: Data, to signedURL: String) async throws {
+        guard let url = URL(string: signedURL) else { throw ApiError(message: "The upload URL is invalid.") }
+        var req = URLRequest(url: url)
+        req.httpMethod = "PUT"
+        req.setValue("image/jpeg", forHTTPHeaderField: "content-type")
+        req.httpBody = bytes
+        let (data, response) = try await URLSession.shared.data(for: req)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        guard (200..<300).contains(status) else { throw failure(data, status) }
+    }
+
     // server paths like "/api/posters/<id>" need the api host in front
     static func absoluteURL(_ pathOrURL: String) -> URL? {
         URL(string: pathOrURL.hasPrefix("/") ? Config.apiURL + pathOrURL : pathOrURL)

@@ -3,12 +3,17 @@ import { serverDb } from "@/lib/db/server";
 import { cleanText, json, requireUser } from "@/lib/http";
 import { PlanError } from "@/lib/plans";
 import { isDay, nextOccurrence } from "@/lib/when";
+import { eventsFor } from "@/lib/hangouts";
 
 // "create event": a thought becomes a public in-app event that anyone in the app can see.
 // from the composer, instead of a signal: POST { text }. from one of your own signals, after
 // it went out: POST { signalId }, or from a plan you started: POST { planId }. either is the
 // author's explicit tap. -> { eventId }
 // it is a mock event: nothing is published to facebook.
+export function GET() {
+  return json(async () => eventsFor((await requireUser()).id));
+}
+
 export function POST(req: Request) {
   return json(async () => {
     const body = (await req.json().catch(() => ({}))) as { text?: unknown; signalId?: unknown; planId?: unknown };

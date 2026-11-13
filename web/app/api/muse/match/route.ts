@@ -7,6 +7,7 @@ import { sseResponse } from "@/lib/muse/sse";
 import { UnderstandSchema } from "@/lib/muse/understand";
 import { createDraftFromMatch } from "@/lib/plans";
 import { getSettings } from "@/lib/settings";
+import { affinityFor } from "@/lib/hangouts";
 import { firstName } from "@/lib/time";
 import type { User } from "@/lib/types";
 import { isFreeAt, todayLine } from "@/lib/when";
@@ -75,7 +76,10 @@ export async function POST(req: Request) {
     const context = await validContext(muse.context);
     const t0 = Date.now();
     // the starter's own groups, so a private group of theirs can be found. nobody else's are read.
-    const { data: memberships } = await db.from("group_members").select("group_id").eq("user_id", user.id);
+    const [{ data: memberships }, affinity] = await Promise.all([
+      db.from("group_members").select("group_id").eq("user_id", user.id),
+      affinityFor(user.id),
+    ]);
     // what the old draft said, so muse changes it rather than starting over
     let revise: { ask: string; draft: string } | null = null;
     if (oldPlanId && reviseAsk) {
@@ -85,7 +89,7 @@ export async function POST(req: Request) {
       ]);
       revise = { ask: reviseAsk, draft: `${old?.activity ?? "a plan"}, ${old?.when_text ?? "no time yet"}, ${old?.where_text ?? "no place yet"}, asking ${(asked ?? []).map((a) => a.user_id).join(", ") || "nobody yet"}` };
     }
-    const found = await discover({ text: `${muse.raw_text as string}${reviseAsk ? ` ${reviseAsk}` : ""}`, activity: understood.data.activity, budgetHint: understood.data.budget_hint, starterFree: user.free_windows, context, interests: user.interests, memberOf: (memberships ?? []).map((m) => m.group_id as string) });
+    const found = await discover({ text: `${muse.raw_text as string}${reviseAsk ? ` ${reviseAsk}` : ""}`, activity: understood.data.activity, budgetHint: understood.data.budget_hint, starterFree: user.free_windows, context, interests: user.interests, memberOf: (memberships ?? []).map((m) => m.group_id as string), affinity });
     const startedFrom = await describeContext(context);
     const discoverMs = Date.now() - t0;
 

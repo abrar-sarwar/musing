@@ -27,7 +27,7 @@ future documentation should:
 ## run it
 
 ```bash
-supabase start                      # from the repo root. api on 56321, db on 56322
+supabase start                      # from the repo root. api on 56321, db on 56322; Storage is required
 cd web && pnpm dev                  # api server on :3000
 cd web && pnpm seed                 # first time only, or use "Reset demo data" in the app
 open ios/Musing.xcodeproj           # pick a simulator or your phone, press run
@@ -50,7 +50,7 @@ verified current behavior: the api server runs on vercel at `https://musing-six.
 - **the web shell** at `/` does not sign in, so it errors on the hosted server. it is a local dev tool.
 - vercel deployment protection covers preview deployments only; the production address is public so phones can reach it.
 
-- **reel clips:** the ten real clips are not in git (they are other creators' videos). they are in a private storage bucket, `reel-videos`, on the hosted database. a build that does not have the files bundled asks `GET /api/reels/videos` for signed links (six hours, demo sign-in required) and streams them. `cd web && pnpm reels:upload` puts the files from `ios/Musing/Resources/mock/reelvideo/` there again. a local stack runs without storage, so against a local server only a mac that has the files plays them and everyone else sees the stills.
+- **reel clips:** the ten real clips are not in git (they are other creators' videos). they are in a private storage bucket, `reel-videos`, on the hosted database. a build that does not have the files bundled asks `GET /api/reels/videos` for signed links (six hours, demo sign-in required) and streams them. `cd web && pnpm reels:upload` puts the files from `ios/Musing/Resources/mock/reelvideo/` there again. the local stack now runs Storage for private Memory photos, but it does not contain these reel objects unless they are uploaded; bundled clips still work and other builds see stills.
 - **reels tab:** the feed is those ten clips and nothing else, in the order `Mock.videoReels` (`ios/Musing/MockData.swift`) lists them: weird, ai, fortnite, gym, chicago, racing, then thrift flip, cafe photoshoot, band and vintage pop-up. each clip loops, and after the last clip the first comes round again. the first two are only clips: no card and nothing from muse. on the others a card names the opted-in friends who liked it ("kai, dev and 2 other friends also want to lock in at the gym") with "this could be us", which hands muse the clip's thought without naming anyone. the likes are seeded rows in `reels_topics`. the seeded stills and the catalog reels are no longer shown in this tab. status: builds for iphone and the likes are on the hosted database; not yet checked on a device.
 - **muse pictures:** the seven plush pictures are not in git either (supplied artwork). they are in a second private bucket, `muse-pictures`. a build without the files asks `GET /api/muse/pictures` once after sign-in (signed links, one hour, demo sign-in required), saves the pictures on the phone and keeps them; until they arrive, or against a local stack, muse is the drawn stand-in. `cd web && pnpm muse:upload` puts the files from `ios/Musing/Resources/mock/muse/` there again.
 
@@ -119,7 +119,7 @@ verified current behavior: the catalog holds 61 public events, 51 groups, 102 ma
 - **people:** a few seeded friends gained interests (basketball, coding, guitar, video games, volunteering, dance) and friday or saturday evening free time so more kinds of thought find a friend. friendships are unchanged.
 
 ```bash
-supabase migration up               # applies pending migrations through 0008_close_friends
+supabase migration up               # applies every pending migration, including post-hangout feedback
 cd web && pnpm seed                 # wipes the demo state and reloads everything; safe to run again, ids are stable
 cd web && pnpm test:discover        # 57 thoughts through the real search, no database, no muse call
 ```
@@ -176,6 +176,19 @@ verified on the hosted server: reading the rules, one live describe call (the fi
 - **what if popup**: one text box, the plan-specific suggestions, and a "Save preference to profile" checkbox. the checkbox is mock only: it can be ticked but saves nothing.
 - **create signal or create event** is a pair of pills above the text box, in the same style as the tabs at the top, with the chosen one highlighted, instead of a drop-down row. the three signal settings below the box each carry a small icon.
 
+## post-hangout feedback and private Memories
+
+implemented in this branch: a scheduled event becomes complete two hours after its start. undated events never prompt. a standalone event host is locked as Going, and a confirmed private plan locks its starter and every member who answered `down` as Going; later pre-completion acceptances are synchronized. standalone-event users can persist Interested or Going until completion. after completion, RSVP and plan-response changes are closed, and only someone who was Going can rate.
+
+- completed linked signal, plan and event cards show **How was it?** while the viewer is eligible and unrated. the same state produces one stable local notification. after saving, the banner shows that person's stars and opens **View memory**; the notification disappears.
+- feedback is 1–5 stars, up to four validated tags, a private note of at most 500 characters and up to five JPEG photos. the native client redraws selected images to normalize orientation and remove metadata, downsizes the long edge to 2048 pixels and recompresses under 6 MiB before upload. the rating is saved even when an individual photo upload fails, and failed uploads can be retried independently.
+- one mutable `hangout_memories` row belongs to each user/event pair. editing preserves its ID. `memory_photos` holds ordered pending/ready metadata; objects live in the private `hangout-memories` bucket and are returned through short-lived signed URLs, never public URLs.
+- the profile Memories tab is the acting person's private archive. friends' profiles do not expose it. plan Memories may retain the already-approved crew snapshot; standalone-event Memories show the host and attendee count without attendee identities. nothing is shared to Facebook or to the crew.
+- structured feedback adjusts future seeded Events, Groups, Marketplace and Reels ordering. star weight is `1 → -2`, `2 → -1`, `3 → 0`, `4 → +1`, `5 → +2`; activity/repeat and matching place/time/value tags add their scoped modifiers. scores are clamped to `-6...+6`. private notes and crew tags do not affect ranking, friend matching and its privacy floor are unchanged, low scores down-rank without hiding, and an explicit Muse request remains primary.
+- viewer-shaped `/api/events`, `/api/events/[id]`, RSVP and feedback routes replace direct app reads of private events. `/api/memories` and its photo reserve/finalize/retry/delete routes act only for the signed-in demo user. the migration removes anonymous direct reads of app-created events, RSVPs, feedback, Memories and photo metadata.
+
+verification status: the clean local database reset applied `20261113180059_post_hangout_feedback.sql`; the feedback suite passed all 18 cases, the existing recommendation, discovery and signal suites passed, TypeScript passed, and all Swift sources type-checked against the iPhoneOS SDK. a full local Storage health check, signed photo round-trip, Xcode app build/device run and two-user manual walkthrough remain unverified. the hosted project has not been migrated for this feature.
+
 ## product boundaries
 
 - existing friends are the default starting circle. mutuals, groups, communities or strangers are not silently added.
@@ -208,6 +221,7 @@ when a plan reaches quorum its group chat is a real chat: members send messages,
 
 - musing. tab, bottom: **muse** on/off (off = plain poll) and **muse trace** (each step, model, latency).
 - Menu tab: **Reset demo data**, **Replay cached Muse** (serve the last good responses, for when the network dies on stage), **Invite posters** (the ~45s image call).
+- Profile > wrench icon > Developer > **Demo time**: **Complete next hangout** finds the acting user's next Going event and advances the shared server clock to just after its two-hour completion boundary. it does not change either phone's system clock. both phones, server eligibility, RSVP locks, banners and the feedback notification therefore switch together. **Real time** clears the offset. changing demo time is admin-only on a deployed server.
 - any link with `?as=<userId>` opens as that person, e.g. `musing://musing?as=alex`. every screen has a link (`musing://reels`, `musing://menu`, `musing://plan/<id>`), and `-open <target>` as a launch argument starts the app there. the avatar in the top bar also switches users.
 
 ## demo script (two phones, about 90 seconds)
@@ -217,10 +231,11 @@ when a plan reaches quorum its group chat is a real chat: members send messages,
 3. B: the ask is under "for you". tap **i'm down**. A's count moves to 1 of 2 without a name.
 4. B: switch to jo. tap **what if...**, choose the Sunday suggestion (or type "sunday instead?"), and tap **ask muse privately**. both phones show "muse is reworking it", then the new plan. nobody is told who asked.
 5. that makes two, so it flips to **it's happening** on both phones: names, the group chat with the plan card, and the mock event handoff.
-6. reels tab: the first two clips show nothing from muse; on the fortnite, gym, chicago and racing clips a card names the friends who want the same thing. tap "this could be us".
-7. musing. tab: flip **muse** off and send a thought to show what's left without it.
+6. on A, open Profile > Developer and tap **Complete next hangout**. return to the linked plan or event: **How was it?** and one notification appear without waiting two real hours. save a rating, private note and optional photo, then open Profile > Memories. on B, confirm A's private Memory and note are not visible.
+7. reels tab: the first two clips show nothing from muse; on the fortnite, gym, chicago and racing clips a card names the friends who want the same thing. tap "this could be us".
+8. musing. tab: flip **muse** off and send a thought to show what's left without it. return Developer time to **Real time** before another run.
 
-the story is one connected, transparently mocked facebook moment: inspiration → friends → seeded Event/Marketplace context → Messenger-style coordination → a shared experience.
+the story is one connected, transparently mocked facebook moment: inspiration → friends → seeded Event/Marketplace context → Messenger-style coordination → a shared experience → private Memory. Events, Groups, Marketplace, Reels, Messenger styling and Memories are all in-app seeded or mock surfaces, not live Facebook integrations.
 
 ## cost notes
 
