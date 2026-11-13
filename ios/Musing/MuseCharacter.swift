@@ -1,9 +1,9 @@
 import SwiftUI
 
-// muse, drawn: a small cream plush creature, shown as its face inside the fluffy hood
-// (the way a contact photo would crop it). two black dot eyes, a small curved smile,
-// rosy cheeks. it is drawn rather than a picture so the face can change: asleep and
-// dreaming, awake, thinking hard, thrilled, serious. no glyphs, no sparkles.
+// muse: a small cream plush creature, shown as its head inside the fluffy hood (the way a
+// contact photo would crop it). the pictures are cut from the real plush, one per
+// expression: awake, asleep and dreaming, thinking hard, thrilled, serious, sad. a drawn
+// version stands in when a build does not have the pictures. no glyphs, no sparkles.
 
 enum MuseExpression: Equatable {
     case asleep // idle: dreaming
@@ -47,9 +47,35 @@ struct MuseFace: View {
     /// eyes shut for a moment. ignored when they are already closed.
     var blink = false
 
+    /// the picture of muse for this expression, cut from the real plush (bundled under mock/muse)
+    private var picture: UIImage? {
+        let name: String
+        switch expression {
+        case .asleep: name = "asleep"
+        case .thinking: name = "thinking"
+        case .hype: name = "hype"
+        case .serious: name = "serious"
+        case .sad: name = blink ? "blink" : "sad"
+        case .awake: name = blink ? "blink" : "awake"
+        }
+        return MockImages.load("muse/\(name).png")
+    }
+
     var body: some View {
+        if let picture {
+            // muse as it really looks: its head, the way a contact photo crops it
+            Image(uiImage: picture).resizable().interpolation(.high).scaledToFit()
+                .frame(width: size, height: size)
+                .accessibilityHidden(true)
+        } else {
+            drawn
+        }
+    }
+
+    /// a drawn stand-in for a build that does not have the pictures
+    private var drawn: some View {
         let s = size
-        ZStack {
+        return ZStack {
             // the hood: a soft round of fur with tufts around the edge
             ForEach(0..<18, id: \.self) { i in
                 let a = Double(i) / 18 * 2 * .pi

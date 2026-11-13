@@ -108,7 +108,7 @@ struct MuseCompanion: View {
         case .idle: break
         }
         switch state {
-        case .mewed: return "mewed."
+        case .mewed: return "mused."
         case .waiting: return "signal sent. waiting for your people..."
         default: return "muse is musing..."
         }

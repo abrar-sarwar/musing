@@ -42,3 +42,6 @@ next-env.d.ts
 
 # other creators' reels used in the local demo only. never committed (this repo is public).
 ios/Musing/Resources/mock/reelvideo/
+
+# the muse plush pictures: supplied artwork, kept on this machine like the reel clips
+ios/Musing/Resources/mock/muse/
