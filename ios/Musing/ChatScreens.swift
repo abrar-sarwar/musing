@@ -25,7 +25,7 @@ struct MessagesScreen: View {
                                 VStack(alignment: .leading, spacing: 2) {
                                     HStack(spacing: 5) {
                                         Text(t.title).font(.system(size: 16, weight: .semibold)).foregroundStyle(FB.text)
-                                        if t.hasMuse { Image(systemName: "sparkles").font(.system(size: 11, weight: .bold)).foregroundStyle(Muse.start).accessibilityLabel("muse is in this chat") }
+                                        if t.hasMuse { MuseFace(expression: .awake, size: 16).accessibilityLabel("muse is in this chat") }
                                     }
                                     if let last = t.last {
                                         let sender = last.senderId == app.userId ? "You" : last.senderId.map { app.user($0).map { firstName($0.name) } ?? "" } ?? "muse"
@@ -338,7 +338,7 @@ struct ThreadScreen: View {
     private var actionRow: some View {
         ScrollView(.horizontal) {
             HStack(spacing: 6) {
-                Image(systemName: "sparkles").font(.system(size: 11, weight: .bold)).foregroundStyle(Muse.start)
+                MuseFace(expression: .awake, size: 20)
                 chip("recap the plan") { Task { await askMuse(["action": "recap"]) } }
                 chip("show our finds") { Task { await askMuse(["action": "finds"]) } }
                 chip("find food nearby") { Task { await askMuse(["action": "food"]) } }
@@ -479,7 +479,7 @@ struct PlanMessageCard: View {
             Rectangle().fill(Muse.entryGradient).frame(height: 4)
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 4) {
-                    Image(systemName: "sparkles").font(.system(size: 12, weight: .semibold))
+                    MuseFace(expression: .hype, size: 18)
                     Text("it's happening").font(.system(size: 12, weight: .semibold))
                 }
                 .foregroundStyle(Muse.text)
@@ -496,7 +496,7 @@ struct PlanMessageCard: View {
                     .buttonStyle(FadePress())
                 }
                 HStack(spacing: 8) {
-                    if let id = card.planId { small("sparkles", "Plan") { app.push(.plan(id)) } }
+                    if let id = card.planId { small("muse", "Plan") { app.push(.plan(id)) } }
                     if let event = card.eventId { small("calendar", "Event") { app.push(.event(event)) } }
                 }
                 .padding(.top, 6)
@@ -512,7 +512,7 @@ struct PlanMessageCard: View {
     private func small(_ icon: String, _ label: String, _ action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 5) {
-                Image(systemName: icon).font(.system(size: 12))
+                Glyph(name: icon, size: 12)
                 Text(label).font(.system(size: 14, weight: .semibold))
             }
             .foregroundStyle(FB.text).frame(maxWidth: .infinity).frame(height: 32).background(FB.input, in: RoundedRectangle(cornerRadius: 8))
