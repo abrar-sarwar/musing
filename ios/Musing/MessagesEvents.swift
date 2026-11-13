@@ -165,30 +165,21 @@ struct EventsScreen: View {
         .onTapGesture { app.push(.publicEvent(ev.id)) }
     }
 
+    /// events made in the app (plan events and public ones), in the same card as the catalog
     @ViewBuilder private var yours: some View {
-                    ForEach(events) { ev in
-                        let date = parseDate(ev.startsAt)
-                        Button { app.push(.event(ev.id)) } label: {
-                            HStack(spacing: 12) {
-                                VStack(spacing: 0) {
-                                    Text(date.map { $0.formatted(.dateTime.month(.abbreviated)).uppercased() } ?? "TBA").font(.system(size: 11, weight: .bold)).foregroundStyle(FB.red)
-                                    Text(date.map { $0.formatted(.dateTime.day()) } ?? "–").font(.system(size: 22, weight: .bold)).foregroundStyle(FB.text)
-                                }
-                                .frame(width: 52, height: 56).background(FB.input, in: RoundedRectangle(cornerRadius: 8))
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(ev.title).font(.system(size: 16, weight: .semibold)).foregroundStyle(FB.text).lineLimit(2).multilineTextAlignment(.leading)
-                                    Text(formatEventDate(ev.startsAt)).font(.system(size: 13)).foregroundStyle(FB.muted)
-                                    if let loc = ev.location { Label(loc, systemImage: "mappin").font(.system(size: 13)).foregroundStyle(FB.muted).lineLimit(1) }
-                                    Text("Hosted by \(ev.host.name)").font(.system(size: 13)).foregroundStyle(FB.muted)
-                                }
-                                Spacer(minLength: 0)
-                                Image(systemName: "chevron.right").font(.system(size: 14, weight: .semibold)).foregroundStyle(FB.muted)
-                            }
-                            .padding(12).background(Color.white)
-                        }
-                        .buttonStyle(FadePress())
-                    }
-                    if events.isEmpty { Text(status).foregroundStyle(FB.muted).frame(maxWidth: .infinity).padding(24) }
+        ForEach(events) { ev in
+            EventStyleCard(topic: ev.title, kicker: ev.planId == nil ? nil : "MADE WITH MUSING.", date: formatEventDate(ev.startsAt), title: ev.title,
+                           place: ev.location ?? "Location to be announced", counts: "Hosted by \(ev.host.name)") {
+                HStack(spacing: 8) {
+                    EventPill(icon: "calendar", label: "See event", primary: true) { app.push(.event(ev.id)) }
+                    ShareLink(item: "\(ev.title) · \(formatEventDate(ev.startsAt))") { EventPillLabel(icon: "arrowshape.turn.up.right", label: "Share") }
+                }
+            }
+            .contentShape(Rectangle())
+            .onTapGesture { app.push(.event(ev.id)) }
+            .padding(.horizontal, 12)
+        }
+        if events.isEmpty { Text(status).foregroundStyle(FB.muted).frame(maxWidth: .infinity).padding(24) }
     }
 
     private func chip(_ label: String, on: Bool, small: Bool = false, _ tap: @escaping () -> Void) -> some View {
