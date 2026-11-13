@@ -50,6 +50,8 @@ verified current behavior: the api server runs on vercel at `https://musing-six.
 - **the web shell** at `/` does not sign in, so it errors on the hosted server. it is a local dev tool.
 - vercel deployment protection covers preview deployments only; the production address is public so phones can reach it.
 
+- **reel clips:** the four real clips are not in git (they are other creators' videos). they are in a private storage bucket, `reel-videos`, on the hosted database. a build that does not have the files bundled asks `GET /api/reels/videos` for signed links (six hours, demo sign-in required) and streams them. `cd web && pnpm reels:upload` puts the files from `ios/Musing/Resources/mock/reelvideo/` there again. a local stack runs without storage, so against a local server only a mac that has the files plays them and everyone else sees the stills.
+
 ## running it on your own mac and phone (teammates)
 
 the short way: clone, run `./setup.sh` from the repo root, then `cd web && pnpm dev` and press run in xcode. the script finds your own apple team, writes your signing and env files, starts the database and seeds it. it asks once for the muse key and never overwrites a file you already have. the steps below are what it does, for when something goes wrong.
@@ -114,6 +116,10 @@ cd web && pnpm test:discover        # 57 thoughts through the real search, no da
 "Reset demo data" in the app does the same reload as `pnpm seed`. thoughts worth trying as maya: "anyone down for basketball", "i wanna get into photography but cameras are expensive", "i wanna learn guitar but i'm broke", "i'm bored tonight", "what can i do for free", "lowkey wanna go hiking", "let's have a game night", "i need a study buddy", "i wanna volunteer", "i need to meet people".
 
 known limits: events only surface at times the person is free, so a morning run never shows for maya (she is free from 11); day and evening words are read by rules, not by muse; weeknight events do not exist in the catalog; listings have no photos beyond the original 22.
+
+### who a signal goes to
+
+verified current behavior on the server and in the composer: a signal goes to **close friends**, **friends only** or **friends of friends**. "only muse" is no longer a choice. close friends is a flag on a friendship (`friendships.close`, migration `0008`): it is one person's call about another, it is seeded (maya's close friends are alex, jo and sam) and there is no screen to edit it yet. a close-friends signal is shown only to the people its author marked close, and muse picks from them alone. a thought started from a reel is an invite like any other; the text handed over never names who liked the reel. `muse` (nobody) remains as a stored value for retired signals and older builds.
 
 ## product boundaries
 

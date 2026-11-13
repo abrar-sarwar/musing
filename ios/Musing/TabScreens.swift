@@ -16,6 +16,14 @@ struct Reel: Identifiable, Hashable {
     /// set for a reel from the fictional catalog: its id there, and a topic key for drawn art
     var catalogId: String? = nil
     var art: String? = nil
+    /// the clip's still, when it is streamed from the server rather than bundled
+    var posterURL: URL? = nil
+}
+
+/// signed links to the reel clips, for a build that does not have the files bundled
+struct ReelVideoLinks: Decodable {
+    struct Link: Decodable { let video: String?; let poster: String? }
+    let videos: [String: Link]
 }
 
 /// who liked a topic's reel. the screen only ever names opted-in friends.
@@ -40,6 +48,7 @@ struct ReelsScreen: View {
     @State private var friendIds: Set<String> = []
     @State private var dismissedLikes: Set<String> = []
     @State private var muted = false
+    @State private var remoteVideos: [String: ReelVideoLinks.Link] = [:]
     @Environment(\.scenePhase) private var scenePhase
 
     /// friends of the viewer who liked this topic's reel and share their reels activity
@@ -53,9 +62,12 @@ struct ReelsScreen: View {
     private var reels: [Reel] {
         // one reel per topic so every reel has its own media; other people's reels only
         let videos = Mock.videoReels.compactMap { v -> Reel? in
-            guard let url = v.url else { return nil }
+            // the bundled file when this build has it, otherwise the same clip streamed from the server
+            let remote = remoteVideos[v.file]
+            guard let url = v.url ?? remote?.video.flatMap(URL.init(string:)) else { return nil }
             let creator = User(id: "creator:\(v.creator)", name: v.creator, avatarSeed: v.creator, bio: nil, interests: [])
-            return Reel(id: "video:\(v.file)", topic: v.topic, user: creator, caption: v.caption, headline: "", poster: "reelvideo/\(v.file).jpg", video: url, pitch: v.pitch)
+            return Reel(id: "video:\(v.file)", topic: v.topic, user: creator, caption: v.caption, headline: "", poster: "reelvideo/\(v.file).jpg", video: url, pitch: v.pitch,
+                        posterURL: v.url == nil ? remote?.poster.flatMap(URL.init(string:)) : nil)
         }
         // a topic with a real clip does not also get a still
         var seen = Set(videos.map(\.topic))
@@ -107,6 +119,11 @@ struct ReelsScreen: View {
         }
         .task(id: app.version) { await load() }
         .task { if app.catalog == nil { await app.loadCatalog() } }
+        .task {
+            // only ask for links when a clip is missing from this build
+            guard Mock.videoReels.contains(where: { $0.url == nil }) else { return }
+            if let links: ReelVideoLinks = try? await API.get("/api/reels/videos", user: app.userId) { remoteVideos = links.videos }
+        }
     }
 
     private func load() async {
@@ -141,6 +158,10 @@ struct ReelsScreen: View {
         let likes = 900 + stableHash(item.id) % 140000 + friends.count
         return ZStack {
             CoverArt(path: item.poster, topic: item.art)
+            if let poster = item.posterURL {
+                AsyncImage(url: poster) { image in image.resizable().scaledToFill() } placeholder: { Color.black }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity).clipped()
+            }
             if let url = item.video {
                 ReelVideo(url: url, playing: isCurrent && app.tab == .reels && scenePhase == .active, muted: muted)
                     .contentShape(Rectangle())
@@ -283,7 +304,9 @@ struct FriendsLikedCard: View {
                 Text(line).font(.system(size: 14.5, weight: .semibold)).foregroundStyle(Color(hex: 0x1c1e21)).lineLimit(2).fixedSize(horizontal: false, vertical: true)
                 Button {
                     onDismiss()
-                    app.makeAMove("\(reel.pitch ?? "this could be us: \(reel.topic)") with \(crew)", from: SignalContext(kind: "reel", id: reel.topic, title: "a reel about \(reel.topic)"))
+                    // the thought goes out as a signal friends can see, so it never names who liked the reel.
+                    // the names stay on this card, which only the viewer sees.
+                    app.makeAMove(reel.pitch ?? "this could be us: \(reel.topic)", from: SignalContext(kind: "reel", id: reel.topic, title: "a reel about \(reel.topic)"))
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: "sparkles").font(.system(size: 12, weight: .bold))

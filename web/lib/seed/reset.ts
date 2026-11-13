@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   APP_SETTINGS,
+  CLOSE_EDGES,
   EVENTS,
   FRIEND_EDGES,
   FRIEND_SIGNALS,
@@ -32,9 +33,10 @@ export async function resetSeed(db: SupabaseClient): Promise<{ users: number; fr
     settings: {},
   })));
 
+  const isClose = (a: string, b: string) => CLOSE_EDGES.some(([x, y]) => (x === a && y === b) || (x === b && y === a));
   const friendships = FRIEND_EDGES.flatMap(([a, b]) => [
-    { user_id: a, friend_id: b },
-    { user_id: b, friend_id: a },
+    { user_id: a, friend_id: b, close: isClose(a, b) },
+    { user_id: b, friend_id: a, close: isClose(a, b) },
   ]);
   await insert(db, "friendships", friendships);
 

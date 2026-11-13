@@ -265,6 +265,13 @@ export const FRIEND_EDGES: Array<[string, string]> = [
   ["tomas", "dara"], ["bea", "eli"], ["finn", "cyrus"], ["zara", "hana"],
 ];
 
+// who counts whom as a close friend. undirected here, marked both ways on insert.
+// keep in step with supabase/migrations/0008_close_friends.sql.
+export const CLOSE_EDGES: Array<[string, string]> = [
+  ["maya", "alex"], ["maya", "jo"], ["maya", "sam"], ["alex", "jo"], ["alex", "sam"], ["jo", "sam"],
+  ["priya", "jo"], ["dev", "kai"], ["theo", "ravi"], ["mina", "lena"], ["noor", "lena"],
+];
+
 // stable ids so the ui can deep-link to seeded rows
 export const THREAD_WEEKEND_CREW = "11111111-1111-4111-8111-111111111111";
 export const EVENT_PRIYA_ROOFTOP = "22222222-2222-4222-8222-222222222222";
@@ -388,11 +395,11 @@ export const LISTINGS = [
 
 // signals a few friends floated before the demo starts, so "discover together" is not
 // empty after a reset. times are relative to seeding, so none arrive expired. sam's is
-// private ("only muse") and must never show for anyone but sam.
+// private (audience "muse") and must never show for anyone but sam. jo's goes to close friends only.
 const daysAhead = (n: number) => new Date(Date.now() + n * 86_400_000).toISOString();
-export const FRIEND_SIGNALS: Array<{ key: string; user_id: string; raw_text: string; audience: "friends" | "mutual" | "muse"; wait_for: number; created_at: string; expires_at: string; interested: string[] }> = [
+export const FRIEND_SIGNALS: Array<{ key: string; user_id: string; raw_text: string; audience: "close" | "friends" | "mutual" | "muse"; wait_for: number; created_at: string; expires_at: string; interested: string[] }> = [
   { key: "alex-records", user_id: "alex", raw_text: "lowkey wanna dig through a record store this weekend", audience: "friends", wait_for: 2, created_at: daysAgo(1), expires_at: daysAhead(6), interested: ["sam"] },
-  { key: "jo-ramen", user_id: "jo", raw_text: "anyone down for late night ramen", audience: "friends", wait_for: 3, created_at: hoursAgo(5), expires_at: daysAhead(2), interested: ["alex", "sam"] },
+  { key: "jo-ramen", user_id: "jo", raw_text: "anyone down for late night ramen", audience: "close", wait_for: 3, created_at: hoursAgo(5), expires_at: daysAhead(2), interested: ["alex", "sam"] },
   { key: "priya-climbing", user_id: "priya", raw_text: "want to try that new climbing gym", audience: "friends", wait_for: 2, created_at: daysAgo(2), expires_at: daysAhead(12), interested: [] },
   { key: "zara-hoops", user_id: "zara", raw_text: "pickup basketball saturday morning?", audience: "mutual", wait_for: 4, created_at: hoursAgo(3), expires_at: daysAhead(3), interested: [] },
   { key: "sam-film", user_id: "sam", raw_text: "thinking about a quiet film night", audience: "muse", wait_for: 2, created_at: daysAgo(1), expires_at: daysAhead(6), interested: [] },

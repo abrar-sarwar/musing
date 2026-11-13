@@ -124,8 +124,9 @@ struct OptionRow<Value: Hashable>: View {
 
 func audienceLabel(_ a: String) -> String {
     switch a {
+    case "close": "Close friends"
     case "mutual": "Friends of friends"
-    case "muse": "Only muse"
+    case "muse": "Private"
     default: "Friends only"
     }
 }
@@ -233,7 +234,7 @@ struct SignalCard: View {
     let onJoin: () -> Void
 
     private var meta: String {
-        let base = signal.audience == "muse" ? "Only muse" : "\(audienceLabel(signal.audience)) · \(signal.waitFor)+ \(signal.waitFor == 1 ? "person" : "people")"
+        let base = signal.audience == "muse" ? "Private" : "\(audienceLabel(signal.audience)) · \(signal.waitFor)+ \(signal.waitFor == 1 ? "person" : "people")"
         // a count, never who
         return signal.inCount > 0 ? "\(base) · \(signal.inCount) in" : base
     }

@@ -1,14 +1,16 @@
 // rules about a signal that need no database: who it is shown to, how many it waits
 // for, when it runs out, and what a set of answers adds up to.
 
-export type Audience = "friends" | "mutual" | "muse";
+// close = the author's close friends only. muse = nobody but muse: no longer something a person
+// picks, but still what an unrecognised value, an older app build and a retired signal get.
+export type Audience = "close" | "friends" | "mutual" | "muse";
 export type ExpiryChoice = "1d" | "3d" | "1w" | "2w";
 
 const DAYS: Record<ExpiryChoice, number> = { "1d": 1, "3d": 3, "1w": 7, "2w": 14 };
 
 /** anything unrecognised stays private: a signal is only shared when the app says so */
 export function parseAudience(v: unknown): Audience {
-  return v === "friends" || v === "mutual" ? v : "muse";
+  return v === "close" || v === "friends" || v === "mutual" ? v : "muse";
 }
 
 export function parseWaitFor(v: unknown): number {
@@ -40,9 +42,11 @@ export function outcome(statuses: string[], quorum: number): "happening" | "fade
   return "open";
 }
 
-export function canSeeSignal(audience: Audience, relation: "self" | "friend" | "mutual" | "none"): boolean {
+/** "close" = a friend the author counts as close. they see everything a friend sees, plus close-only signals. */
+export function canSeeSignal(audience: Audience, relation: "self" | "close" | "friend" | "mutual" | "none"): boolean {
   if (relation === "self") return true;
-  if (relation === "friend") return audience !== "muse";
+  if (relation === "close") return audience !== "muse";
+  if (relation === "friend") return audience === "friends" || audience === "mutual";
   if (relation === "mutual") return audience === "mutual";
   return false;
 }

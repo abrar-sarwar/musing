@@ -31,8 +31,11 @@ export async function POST(req: Request) {
     const audience = muse.audience === "mutual" || body.audience === "mutual" ? "mutual" : "friends";
 
     // candidates are this person's friends and nobody else. the ids muse may use come from here.
-    const { data: edges } = await db.from("friendships").select("friend_id").eq("user_id", user.id);
-    const friendIds = (edges ?? []).map((e) => e.friend_id as string);
+    const { data: allEdges } = await db.from("friendships").select("friend_id,close").eq("user_id", user.id);
+    // a close-friends signal narrows the pool to close friends (everyone, if nobody is marked close)
+    const closeOnly = muse.audience === "close" ? (allEdges ?? []).filter((e) => e.close) : [];
+    const edges = closeOnly.length > 0 ? closeOnly : (allEdges ?? []);
+    const friendIds = edges.map((e) => e.friend_id as string);
     if (friendIds.length < 1) return Response.json({ ok: false, error: "not enough friends in the mock data for this person" }, { status: 409 });
     // mutual friends: one hop out. only a count of friends in common is kept, never which friends.
     const mutualCount = new Map<string, number>();
