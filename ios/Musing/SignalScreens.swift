@@ -258,7 +258,8 @@ struct PlanSummaryCard: View {
             }
             PeopleChips(plan: plan).padding(.top, 2)
             if eventAction, plan.role == "starter" {
-                EventPill(icon: "calendar.badge.plus", label: "Create event", busy: making) { confirming = true }
+                // on the soft blue of a confirmed plan a grey button disappears, so it is white there
+                EventPill(icon: "calendar.badge.plus", label: "Create event", white: look == .confirmed, busy: making) { confirming = true }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

@@ -56,11 +56,13 @@ struct EventPill: View {
     let icon: String
     let label: String
     var primary = false
+    /// white instead of grey, for a card whose own background is tinted
+    var white = false
     var busy = false
     let action: () -> Void
 
     var body: some View {
-        Button(action: action) { EventPillLabel(icon: icon, label: busy ? "\(label)…" : label, primary: primary) }
+        Button(action: action) { EventPillLabel(icon: icon, label: busy ? "\(label)…" : label, primary: primary, white: white) }
             .buttonStyle(FadePress()).disabled(busy)
     }
 }
@@ -69,6 +71,7 @@ struct EventPillLabel: View {
     let icon: String
     let label: String
     var primary = false
+    var white = false
 
     var body: some View {
         HStack(spacing: 6) {
@@ -76,7 +79,7 @@ struct EventPillLabel: View {
             Text(label).font(.system(size: 14, weight: .semibold)).lineLimit(1)
         }
         .foregroundStyle(primary ? FB.blue : FB.text).frame(maxWidth: .infinity).frame(height: 36)
-        .background(primary ? FB.blueSoft : FB.input, in: RoundedRectangle(cornerRadius: 8))
+        .background(white ? Color.white : primary ? FB.blueSoft : FB.input, in: RoundedRectangle(cornerRadius: 8))
     }
 }
 

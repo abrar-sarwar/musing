@@ -355,43 +355,37 @@ struct TracePanel: View {
     }
 }
 
-// "what if..." is the open counteroffer. "just between us" is the private limit:
-// muse plans around it and never repeats it. either one triggers a live re-solve.
+// "what if...": one box. whatever is typed goes to muse and to nobody else: friends see the
+// plan muse comes back with, never the words or who asked. it triggers a live re-solve.
 struct WhatIf: View {
     @EnvironmentObject var app: AppState
     let planId: String
-    let existingLimit: String?
     /// two or three changes that fit this plan. tapping one fills the box, it does not send.
     var suggestions: [String] = []
     let onDone: () -> Void
     let onClose: () -> Void
     @State private var offer = ""
-    @State private var limit: String
+    /// mock only: shown as designed, saved nowhere yet
+    @State private var keep = false
     @State private var busy = false
     @State private var stream = ""
     @State private var error: String?
 
-    init(planId: String, existingLimit: String?, suggestions: [String] = [], onDone: @escaping () -> Void, onClose: @escaping () -> Void) {
-        self.planId = planId
-        self.existingLimit = existingLimit
-        self.suggestions = suggestions
-        self.onDone = onDone
-        self.onClose = onClose
-        _limit = State(initialValue: existingLimit ?? "")
-    }
-
     var body: some View {
         let o = offer.trimmingCharacters(in: .whitespacesAndNewlines)
-        let l = limit.trimmingCharacters(in: .whitespacesAndNewlines)
-        let limitChanged = l != (existingLimit ?? "")
-        let canSend = !busy && (o.count > 1 || (limitChanged && l.count > 1))
         VStack(alignment: .leading, spacing: 10) {
             VStack(alignment: .leading, spacing: 6) {
                 Text(Copy.whatIf).font(.system(size: 20, weight: .bold)).foregroundStyle(FB.text)
                 Text("Suggest any changes or preferences, anonymously. Muse will adjust the plan and re-confirm with everyone.").font(UI.meta).foregroundStyle(FB.muted).fixedSize(horizontal: false, vertical: true)
             }
             .padding(.bottom, 2)
-            field("Sunday instead? Somewhere closer?", $offer, lines: 3...5)
+            // a white box with a hairline border, like every other text box in musing.
+            TextField("Sunday instead? Somewhere closer?", text: $offer, axis: .vertical).font(.system(size: 15)).foregroundStyle(FB.text).lineLimit(3...5)
+                .textInputAutocapitalization(.never).disabled(busy)
+                .padding(12)
+                .background(Color.white, in: RoundedRectangle(cornerRadius: UI.buttonRadius))
+                .overlay(RoundedRectangle(cornerRadius: UI.buttonRadius).stroke(FB.button, lineWidth: 1))
+                .onChange(of: offer) { if offer.count > 200 { offer = String(offer.prefix(200)) } }
             if !suggestions.isEmpty {
                 // stacked, not wrapped: each idea is a full sentence
                 VStack(alignment: .leading, spacing: 6) {
@@ -408,42 +402,36 @@ struct WhatIf: View {
                 }
                 .accessibilityLabel("ideas that fit this plan")
             }
-            HStack(spacing: 5) {
-                Image(systemName: "lock.fill").font(.system(size: 11)).foregroundStyle(FB.text)
-                Text(Copy.privateLimit).font(.system(size: 14, weight: .bold)).foregroundStyle(FB.text)
+            Button { keep.toggle() } label: {
+                HStack(spacing: 8) {
+                    RoundedRectangle(cornerRadius: 4).fill(keep ? FB.blue : Color.white).frame(width: 18, height: 18)
+                        .overlay(RoundedRectangle(cornerRadius: 4).stroke(keep ? FB.blue : FB.divider, lineWidth: 1))
+                        .overlay { if keep { Image(systemName: "checkmark").font(.system(size: 11, weight: .bold)).foregroundStyle(.white) } }
+                    Text("Save preference to profile").font(.system(size: 14)).foregroundStyle(FB.text)
+                }
+                .frame(height: 28).contentShape(Rectangle())
             }
-            .padding(.top, 4)
-            field("Anything muse should quietly work around", $limit, lines: 1...3)
-            Text(Copy.privateNote).font(.system(size: 12)).foregroundStyle(FB.muted).fixedSize(horizontal: false, vertical: true)
+            .buttonStyle(.plain).disabled(busy)
+            .accessibilityAddTraits(keep ? .isSelected : [])
 
             if busy || !stream.isEmpty { MuseBubble(text: stream, thinking: busy, label: busy ? Copy.solving : nil) }
             if let error { Text("muse couldn't rework it (\(error)). the plan stays as it was.").font(.system(size: 14)).foregroundStyle(FB.red) }
 
-            GradientButton(label: busy ? "Reworking" : "Ask Muse privately", big: true, busy: busy, disabled: !canSend) {
-                Task { await send(offer: o, limit: limitChanged ? l : nil) }
+            GradientButton(label: busy ? "Reworking" : "Ask Muse privately", big: true, busy: busy, disabled: busy || o.count < 2) {
+                Task { await send(offer: o) }
             }
             .padding(.top, 4)
             QuietButton(label: "Never mind", disabled: busy, fill: true, action: onClose)
         }
     }
 
-    /// a white box with a hairline border, like every other text box in musing.
-    private func field(_ placeholder: String, _ text: Binding<String>, lines: ClosedRange<Int>) -> some View {
-        TextField(placeholder, text: text, axis: .vertical).font(.system(size: 15)).foregroundStyle(FB.text).lineLimit(lines)
-            .textInputAutocapitalization(.never).disabled(busy)
-            .padding(12)
-            .background(Color.white, in: RoundedRectangle(cornerRadius: UI.buttonRadius))
-            .overlay(RoundedRectangle(cornerRadius: UI.buttonRadius).stroke(FB.button, lineWidth: 1))
-            .onChange(of: text.wrappedValue) { if text.wrappedValue.count > 200 { text.wrappedValue = String(text.wrappedValue.prefix(200)) } }
-    }
-
-    private func send(offer: String, limit: String?) async {
+    private func send(offer: String) async {
         busy = true
         stream = ""
         error = nil
         var streamError: String?
         do {
-            let body: [String: Any] = ["counteroffer": offer.isEmpty ? NSNull() : offer, "privateLimit": limit.map { $0.isEmpty ? NSNull() : $0 as Any } ?? NSNull()]
+            let body: [String: Any] = ["counteroffer": offer]
             try await API.stream("/api/plans/\(planId)/whatif", user: app.userId, body: body) { event, data in
                 switch event {
                 case "delta": stream += data["text"] as? String ?? ""
@@ -512,7 +500,7 @@ struct PlanScreen: View {
                     // a flat white card in the middle of a dark scrim. no shadow: nothing in musing has one.
                     Color.black.opacity(0.75).ignoresSafeArea().onTapGesture { whatIfOpen = false }
                     ScrollView {
-                        WhatIf(planId: p.id, existingLimit: p.me?.privateLimit, suggestions: p.whatIfs ?? [], onDone: {
+                        WhatIf(planId: p.id, suggestions: p.whatIfs ?? [], onDone: {
                             Task {
                                 await load()
                                 whatIfOpen = false
