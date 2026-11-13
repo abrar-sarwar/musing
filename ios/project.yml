@@ -67,3 +67,39 @@ targets:
           NAME=$(scutil --get LocalHostName 2>/dev/null || true)
           if [ -n "$NAME" ]; then HOST="${NAME}.local"; else HOST=$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || true); fi
           echo "DEV_HOST=${HOST}" >> "$DIR/config.env"
+  # drives the real app in the simulator: composer, sends, @muse, chips, votes, mute.
+  # needs the local server running and a plan chat to test against (see MusingUITests/README).
+  MusingUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: MusingUITests
+    dependencies:
+      - target: Musing
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(MUSING_BUNDLE_ID).uitests
+        TEST_TARGET_NAME: Musing
+        CODE_SIGN_STYLE: Automatic
+        GENERATE_INFOPLIST_FILE: "NO"
+    configFiles:
+      Debug: Signing.xcconfig
+      Release: Signing.xcconfig
+    info:
+      path: MusingUITests/Info.plist
+      properties:
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+          NSAllowsArbitraryLoads: true
+schemes:
+  Musing:
+    build:
+      targets:
+        Musing: all
+        MusingUITests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - MusingUITests

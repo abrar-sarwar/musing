@@ -21,10 +21,21 @@
 		B8DFFFD5D5C461A7FF331B1C /* MessagesEvents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81597564723C367725B24983 /* MessagesEvents.swift */; };
 		C415FFDBDF21DD509F612AA3 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3BEE59E49112D7667017ED2 /* Theme.swift */; };
 		C6674078CAD90A1FC989D2B2 /* ProfileScreens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F2B7946FD9C9789BF862A89 /* ProfileScreens.swift */; };
+		CA497CF4106748705C915EA8 /* ChatUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B5D6BB69A7F325ED29945C /* ChatUITests.swift */; };
 		DDA6EE904AD299658D69F0B7 /* mock in Resources */ = {isa = PBXBuildFile; fileRef = E81E9D792DB9F1DE268B92EE /* mock */; };
 		E1074FF6CA6996A94B4367FC /* Notifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17C029DB75B0928CF96F690F /* Notifier.swift */; };
 		F0AD17268F08EE813A6FDF23 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = A40C90A31D82C11B53AAE921 /* AppState.swift */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		D0F84ED8BD156B6E7E517816 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A32FD08AF84F13F3B94B2958 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 5C60A2E4FAA6B1C29B2AD4DC;
+			remoteInfo = Musing;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		03D86AEA4EFA2E35E76B79F4 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
@@ -35,18 +46,21 @@
 		486FAEBE1D661DBCF5510D00 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		5604F50B9594968202DDCDFE /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		584EFCD5124E34A0BCEC14FD /* Musing.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Musing.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		60FEC8EF34DE38D42D051736 /* MusingUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = MusingUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		6B727CBE52141B1B3B48151A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		81597564723C367725B24983 /* MessagesEvents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessagesEvents.swift; sourceTree = "<group>"; };
 		8313505AAD8B203FF396618B /* HomeScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeScreen.swift; sourceTree = "<group>"; };
 		8B4A18496BC1DF6401775555 /* TabScreens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabScreens.swift; sourceTree = "<group>"; };
 		91A02AEA219B126BBB6A7BE3 /* MusingApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusingApp.swift; sourceTree = "<group>"; };
 		A40C90A31D82C11B53AAE921 /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
+		B1B5D6BB69A7F325ED29945C /* ChatUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatUITests.swift; sourceTree = "<group>"; };
 		CBB047C7D1E0507BE278AD1F /* ChatScreens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatScreens.swift; sourceTree = "<group>"; };
 		CE750F1B4A67E4D90E053821 /* DiscoverScreens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverScreens.swift; sourceTree = "<group>"; };
 		D3BEE59E49112D7667017ED2 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		E81E9D792DB9F1DE268B92EE /* mock */ = {isa = PBXFileReference; lastKnownFileType = folder; name = mock; path = Musing/Resources/mock; sourceTree = SOURCE_ROOT; };
 		EB761A920EFBE3157F38646B /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
 		F0614ADA4DEFC31A507568F8 /* API.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = API.swift; sourceTree = "<group>"; };
-		"TEMP_98F4275F-8874-472B-8D03-C2DA80688FE4" /* Signing.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Signing.xcconfig; sourceTree = "<group>"; };
+		"TEMP_F2984B33-5622-49CF-BF9F-5AED38166102" /* Signing.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Signing.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -79,6 +93,7 @@
 			isa = PBXGroup;
 			children = (
 				584EFCD5124E34A0BCEC14FD /* Musing.app */,
+				60FEC8EF34DE38D42D051736 /* MusingUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -87,6 +102,7 @@
 			isa = PBXGroup;
 			children = (
 				681E28E5B4B50C1CE58FB1F1 /* Musing */,
+				97E248E28941A9E3F333A417 /* MusingUITests */,
 				6C85C9C7198CA8A9C30D2FC1 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -99,10 +115,19 @@
 			path = Resources;
 			sourceTree = "<group>";
 		};
-		"TEMP_871B64A4-4D00-41CD-A08B-327BCC309C37" /* ios */ = {
+		97E248E28941A9E3F333A417 /* MusingUITests */ = {
 			isa = PBXGroup;
 			children = (
-				"TEMP_98F4275F-8874-472B-8D03-C2DA80688FE4" /* Signing.xcconfig */,
+				B1B5D6BB69A7F325ED29945C /* ChatUITests.swift */,
+				6B727CBE52141B1B3B48151A /* Info.plist */,
+			);
+			path = MusingUITests;
+			sourceTree = "<group>";
+		};
+		"TEMP_8E507FF9-7527-423C-8BDF-0A08D545AE79" /* ios */ = {
+			isa = PBXGroup;
+			children = (
+				"TEMP_F2984B33-5622-49CF-BF9F-5AED38166102" /* Signing.xcconfig */,
 			);
 			path = ios;
 			sourceTree = "<group>";
@@ -110,6 +135,24 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		55728B74C128DAE359FB95D0 /* MusingUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A2C32D2A380153CF4B9D3842 /* Build configuration list for PBXNativeTarget "MusingUITests" */;
+			buildPhases = (
+				A424C042C5AEBCAFBB3542F6 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				27FBB366E97CC01AF61E1321 /* PBXTargetDependency */,
+			);
+			name = MusingUITests;
+			packageProductDependencies = (
+			);
+			productName = MusingUITests;
+			productReference = 60FEC8EF34DE38D42D051736 /* MusingUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 		5C60A2E4FAA6B1C29B2AD4DC /* Musing */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = F98A028A20785875F241DBB7 /* Build configuration list for PBXNativeTarget "Musing" */;
@@ -138,6 +181,11 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
+					55728B74C128DAE359FB95D0 = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+						TestTargetID = 5C60A2E4FAA6B1C29B2AD4DC;
+					};
 					5C60A2E4FAA6B1C29B2AD4DC = {
 						DevelopmentTeam = "";
 						ProvisioningStyle = Automatic;
@@ -159,6 +207,7 @@
 			projectRoot = "";
 			targets = (
 				5C60A2E4FAA6B1C29B2AD4DC /* Musing */,
+				55728B74C128DAE359FB95D0 /* MusingUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -220,12 +269,48 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A424C042C5AEBCAFBB3542F6 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				CA497CF4106748705C915EA8 /* ChatUITests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		27FBB366E97CC01AF61E1321 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 5C60A2E4FAA6B1C29B2AD4DC /* Musing */;
+			targetProxy = D0F84ED8BD156B6E7E517816 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
+		6439779877C455273C3960F4 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = "TEMP_F2984B33-5622-49CF-BF9F-5AED38166102" /* Signing.xcconfig */;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = MusingUITests/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(MUSING_BUNDLE_ID).uitests";
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = Musing;
+			};
+			name = Release;
+		};
 		75ED0AA4A1E4DD7D3A5E2BAC /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = "TEMP_98F4275F-8874-472B-8D03-C2DA80688FE4" /* Signing.xcconfig */;
+			baseConfigurationReference = "TEMP_F2984B33-5622-49CF-BF9F-5AED38166102" /* Signing.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
@@ -245,9 +330,29 @@
 			};
 			name = Debug;
 		};
+		A01E051343FC0473372CF236 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = "TEMP_F2984B33-5622-49CF-BF9F-5AED38166102" /* Signing.xcconfig */;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = MusingUITests/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(MUSING_BUNDLE_ID).uitests";
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = Musing;
+			};
+			name = Debug;
+		};
 		D6C91F994409A2337C9319EB /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = "TEMP_98F4275F-8874-472B-8D03-C2DA80688FE4" /* Signing.xcconfig */;
+			baseConfigurationReference = "TEMP_F2984B33-5622-49CF-BF9F-5AED38166102" /* Signing.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
@@ -396,6 +501,15 @@
 			buildConfigurations = (
 				EE98268914B7E9B4837D7767 /* Debug */,
 				E235A97EA6FA5A39782692DD /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		A2C32D2A380153CF4B9D3842 /* Build configuration list for PBXNativeTarget "MusingUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A01E051343FC0473372CF236 /* Debug */,
+				6439779877C455273C3960F4 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

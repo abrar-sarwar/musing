@@ -309,6 +309,7 @@ struct ThreadScreen: View {
                 if let text {
                     if !text.isEmpty {
                         Text(text).font(.system(size: 16)).foregroundStyle(FB.text)
+                            .accessibilityIdentifier("muse-text")
                             .padding(.horizontal, 12).padding(.vertical, 8)
                             .background(Color.white, in: RoundedRectangle(cornerRadius: 18))
                             .overlay(RoundedRectangle(cornerRadius: 18).stroke(Muse.line, lineWidth: 1))
@@ -316,7 +317,7 @@ struct ThreadScreen: View {
                 } else {
                     TypingDots().padding(.horizontal, 14).padding(.vertical, 11)
                         .background(Color.white, in: RoundedRectangle(cornerRadius: 18)).overlay(RoundedRectangle(cornerRadius: 18).stroke(Muse.line, lineWidth: 1))
-                        .accessibilityLabel("muse is typing")
+                        .accessibilityElement().accessibilityLabel("muse is typing").accessibilityIdentifier("muse-typing")
                 }
                 if let card {
                     switch card.type {
@@ -368,6 +369,7 @@ struct ThreadScreen: View {
         return HStack(alignment: .bottom, spacing: 8) {
             TextField(museOn ? "Message, or @muse" : "Message", text: $draft, axis: .vertical)
                 .font(.system(size: 16)).foregroundStyle(FB.text).lineLimit(1...5).focused($typing)
+                .accessibilityIdentifier("chat-composer")
                 .padding(.horizontal, 14).padding(.vertical, 8)
                 .background(FB.input, in: RoundedRectangle(cornerRadius: 19))
                 .disabled(detail == nil)
