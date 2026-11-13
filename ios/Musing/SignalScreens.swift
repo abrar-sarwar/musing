@@ -197,9 +197,12 @@ func planKicker(_ p: PlanView) -> String {
 
 /// one plan: where it stands, what, when, where, who. the same card in the list and on the plan page.
 struct PlanSummaryCard: View {
+    @EnvironmentObject var app: AppState
     let plan: PlanView
     /// on the plan's own page the title is larger
     var detail = false
+    @State private var confirming = false
+    @State private var making = false
 
     var body: some View {
         let waitingOnMe = plan.role == "member" && plan.state == "proposing" && plan.me?.status == "pending"
@@ -211,7 +214,31 @@ struct PlanSummaryCard: View {
                        kicker: planKicker(plan) + (waitingOnMe && !detail ? " · WAITING ON YOU" : ""),
                        date: plan.when ?? "Date to be decided", title: sentenceCase(plan.activity ?? "A plan"),
                        place: plan.where.map(sentenceCase), counts: [who, left].compactMap { $0 }.joined(separator: " · ")) {
-            PeopleChips(plan: plan)
+            VStack(alignment: .leading, spacing: 8) {
+                PeopleChips(plan: plan)
+                if plan.role == "starter" {
+                    EventPill(icon: "calendar.badge.plus", label: "Create event", busy: making) { confirming = true }
+                }
+            }
+        }
+        // the same explicit, confirmed step as on a signal card
+        .confirmationDialog("Make this a public event?", isPresented: $confirming, titleVisibility: .visible) {
+            Button("Create event") { makeEvent() }
+        } message: {
+            Text("Anyone in the app will see it. It's an in-app mock event. Nothing is posted to Facebook.")
+        }
+    }
+
+    private func makeEvent() {
+        making = true
+        Task {
+            do {
+                let r: EventCreated = try await API.post("/api/events", user: app.userId, body: ["planId": plan.id])
+                app.push(.event(r.eventId))
+            } catch let e {
+                toast(errorText(e))
+            }
+            making = false
         }
     }
 }

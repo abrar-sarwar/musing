@@ -6,13 +6,15 @@ import { isDay, nextOccurrence } from "@/lib/when";
 
 // "create event": a thought becomes a public in-app event that anyone in the app can see.
 // from the composer, instead of a signal: POST { text }. from one of your own signals, after
-// it went out: POST { signalId }, the author's explicit tap. -> { eventId }
+// it went out: POST { signalId }, or from a plan you started: POST { planId }. either is the
+// author's explicit tap. -> { eventId }
 // it is a mock event: nothing is published to facebook.
 export function POST(req: Request) {
   return json(async () => {
-    const body = (await req.json().catch(() => ({}))) as { text?: unknown; signalId?: unknown };
+    const body = (await req.json().catch(() => ({}))) as { text?: unknown; signalId?: unknown; planId?: unknown };
     const user = await requireUser();
-    const text = typeof body.signalId === "string" ? await ownSignalText(body.signalId, user.id) : cleanText(body.text, 280);
+    const signalId = typeof body.planId === "string" ? await ownPlanSignal(body.planId, user.id) : body.signalId;
+    const text = typeof signalId === "string" ? await ownSignalText(signalId, user.id) : cleanText(body.text, 280);
     if (!text || text.length < 2) throw new PlanError("say a little more (2 to 280 characters)");
     // a day named in the words sets the date. a time of day sets the hour. no day, no date yet.
     const intent = readIntent(text);
@@ -36,4 +38,12 @@ async function ownSignalText(signalId: string, userId: string): Promise<string> 
   const { data } = await serverDb().from("muses").select("raw_text").eq("id", signalId).eq("user_id", userId).maybeSingle();
   if (!data) throw new PlanError("signal not found", 404);
   return data.raw_text as string;
+}
+
+// only the starter can make their own plan public. it goes out as the thought behind it.
+async function ownPlanSignal(planId: string, userId: string): Promise<string> {
+  if (!/^[0-9a-f-]{36}$/i.test(planId)) throw new PlanError("plan not found", 404);
+  const { data } = await serverDb().from("plans").select("muse_id").eq("id", planId).eq("starter_id", userId).maybeSingle();
+  if (!data?.muse_id) throw new PlanError("plan not found", 404);
+  return data.muse_id as string;
 }
