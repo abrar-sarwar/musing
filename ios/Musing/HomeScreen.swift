@@ -422,6 +422,10 @@ struct MusingHomeCard: View {
         .padding(12)
         .background(Muse.wash, in: RoundedRectangle(cornerRadius: UI.cardRadius))
         .overlay(RoundedRectangle(cornerRadius: UI.cardRadius).stroke(Muse.line, lineWidth: 1))
+        // anywhere on the card that is not one of its own controls opens musing.
+        .contentShape(RoundedRectangle(cornerRadius: UI.cardRadius))
+        .onTapGesture { app.push(.musing(compose: false)) }
+        .accessibilityAction(named: "Open musing") { app.push(.musing(compose: false)) }
         .padding(.horizontal, 12).padding(.bottom, 12)
         // paint from the last good answer for this person, then refresh in the background.
         // this endpoint is database only, so opening home never costs a muse call.

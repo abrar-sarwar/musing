@@ -75,17 +75,13 @@ struct MuseCompanion: View {
 
     private var avatar: CGFloat { UIScreen.main.bounds.width < 380 ? 84 : 96 }
 
-    /// the plan to talk about: the one just made here, else the newest live one from the last day
+    /// the plan to talk about: only one this screen just made by sending a signal. arriving here
+    /// with older plans around is not news, so muse stays idle until something is actually sent.
     private var plan: PlanView? {
-        let mine = home?.mine ?? []
-        if let id = mood.freshPlanId, !dismissed.contains(id) {
-            if let live = mine.first(where: { $0.id == id }) { return live }
-            if let freshPlan, freshPlan.id == id { return freshPlan }
-        }
-        return mine.first { p in
-            guard !dismissed.contains(p.id), p.state != "faded", p.completed != true else { return false }
-            return parseDate(p.updatedAt).map { Date().timeIntervalSince($0) < 86400 } ?? false
-        }
+        guard let id = mood.freshPlanId, !dismissed.contains(id) else { return nil }
+        if let live = (home?.mine ?? []).first(where: { $0.id == id }) { return live }
+        if let freshPlan, freshPlan.id == id { return freshPlan }
+        return nil
     }
 
     private var state: MuseState {
