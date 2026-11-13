@@ -91,6 +91,7 @@ struct PlanView: Decodable, Identifiable {
     let completed: Bool?
     /// ideas for the "what if..." box that fit this plan
     let whatIfs: [String]?
+    let updatedAt: String?
 }
 
 // one signal, shaped for one viewer. who is in is only ever a count.

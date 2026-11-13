@@ -16,6 +16,8 @@ struct SignalComposer: View {
     enum Phase { case idle, reading, asking, mixing, error }
 
     @EnvironmentObject var app: AppState
+    /// what this composer is doing, for the muse companion under the form
+    @ObservedObject var mood: MuseMood
     let autoFocus: Bool
     let onPlan: (String) -> Void
     @State private var text = ""
@@ -76,10 +78,7 @@ struct SignalComposer: View {
             OptionRow(label: "Expires after", options: [("1d", "1 day"), ("3d", "3 days"), ("1w", "1 week"), ("2w", "2 weeks")], selection: $expires, disabled: busy)
 
             GradientButton(label: phase == .reading ? "Muse is reading" : phase == .mixing ? (museOn ? "Finding your people" : "Sending") : "Send a signal", big: true, busy: busy, disabled: !canSend) { send() }
-            HStack(alignment: .top, spacing: 8) {
-                Image(systemName: "sparkles").font(.system(size: 14, weight: .semibold)).foregroundStyle(Muse.start)
-                Text(note).font(.system(size: 13).italic()).foregroundStyle(FB.muted).fixedSize(horizontal: false, vertical: true)
-            }
+            Text(note).font(.system(size: 13).italic()).foregroundStyle(FB.muted).fixedSize(horizontal: false, vertical: true)
 
             if museOn, phase != .idle, phase != .error {
                 VStack(alignment: .leading, spacing: 10) {
@@ -117,6 +116,20 @@ struct SignalComposer: View {
         // a thought handed over from the reels card, a recap or muse's suggestion
         .onChange(of: app.handoff) { takeHandoff() }
         .onDisappear { work?.cancel() }
+        // the companion follows the real work: reading, then looking for people, then writing the plan
+        .onChange(of: phase) { tellMuse() }
+        .onChange(of: pitch.isEmpty) { tellMuse() }
+        .onChange(of: focused) { mood.typing = focused }
+    }
+
+    private func tellMuse() {
+        switch phase {
+        case .idle: mood.stage = .idle
+        case .reading: mood.stage = .reading
+        case .asking: mood.stage = .asking
+        case .mixing: mood.stage = !app.settings.museOn ? .sending : pitch.isEmpty ? .checking : .writing
+        case .error: mood.stage = .error
+        }
     }
 
     private func tag(_ t: String, muted: Bool = false) -> some View {
@@ -175,12 +188,14 @@ struct SignalComposer: View {
         if let streamError { throw ApiError(message: streamError) }
         guard let planId else { throw ApiError(message: "muse didn't finish the plan") }
         reset()
+        mood.freshPlanId = planId
         onPlan(planId)
     }
 
     private func send() {
         guard canSend else { return }
         focused = false
+        mood.freshPlanId = nil
         error = nil
         reply = ""
         understood = nil
@@ -197,6 +212,7 @@ struct SignalComposer: View {
                     phase = .mixing
                     let r: PlanIdResponse = try await API.post("/api/plans", user: user, body: body)
                     reset()
+                    mood.freshPlanId = r.planId
                     onPlan(r.planId)
                     return
                 }

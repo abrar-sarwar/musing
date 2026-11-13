@@ -20,6 +20,7 @@
 		718F26A396187AD21440C2FC /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB761A920EFBE3157F38646B /* Components.swift */; };
 		90EB7557E2234D0BFC016E2F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 486FAEBE1D661DBCF5510D00 /* Assets.xcassets */; };
 		99C3DF4C971DD9053DF1926F /* API.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0614ADA4DEFC31A507568F8 /* API.swift */; };
+		9D43636E74A4E684EF799AAB /* MuseCompanion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 584CAD050334071E5ABF9D40 /* MuseCompanion.swift */; };
 		A0BD911A19291B81127AF821 /* DraftEditing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A58ED0F113C5D6C6C098F70 /* DraftEditing.swift */; };
 		B8DFFFD5D5C461A7FF331B1C /* MessagesEvents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81597564723C367725B24983 /* MessagesEvents.swift */; };
 		C415FFDBDF21DD509F612AA3 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3BEE59E49112D7667017ED2 /* Theme.swift */; };
@@ -49,6 +50,7 @@
 		486FAEBE1D661DBCF5510D00 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		4A58ED0F113C5D6C6C098F70 /* DraftEditing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DraftEditing.swift; sourceTree = "<group>"; };
 		5604F50B9594968202DDCDFE /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		584CAD050334071E5ABF9D40 /* MuseCompanion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MuseCompanion.swift; sourceTree = "<group>"; };
 		584EFCD5124E34A0BCEC14FD /* Musing.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Musing.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		60FEC8EF34DE38D42D051736 /* MusingUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = MusingUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		6B727CBE52141B1B3B48151A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -66,7 +68,7 @@
 		EB761A920EFBE3157F38646B /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
 		F0614ADA4DEFC31A507568F8 /* API.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = API.swift; sourceTree = "<group>"; };
 		F7CA14DBC87E619CEC3A1129 /* CoverArt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverArt.swift; sourceTree = "<group>"; };
-		"TEMP_D34CFB61-5A6A-48DE-81E3-5B2A58E60A76" /* Signing.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Signing.xcconfig; sourceTree = "<group>"; };
+		"TEMP_4B3324EF-CB7C-4CB8-8CA1-DAE0910DE986" /* Signing.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Signing.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -86,6 +88,7 @@
 				81597564723C367725B24983 /* MessagesEvents.swift */,
 				46CFF1AAB126FDC7E7661239 /* MockData.swift */,
 				03D86AEA4EFA2E35E76B79F4 /* Models.swift */,
+				584CAD050334071E5ABF9D40 /* MuseCompanion.swift */,
 				91A02AEA219B126BBB6A7BE3 /* MusingApp.swift */,
 				1044FCEE089D4A38F99108DD /* MusingScreens.swift */,
 				17C029DB75B0928CF96F690F /* Notifier.swift */,
@@ -133,10 +136,10 @@
 			path = MusingUITests;
 			sourceTree = "<group>";
 		};
-		"TEMP_9F27D0DB-EE36-475C-AC71-97F50A347E02" /* ios */ = {
+		"TEMP_26D67D9C-6895-4AFC-8B04-1C5FF2C39E99" /* ios */ = {
 			isa = PBXGroup;
 			children = (
-				"TEMP_D34CFB61-5A6A-48DE-81E3-5B2A58E60A76" /* Signing.xcconfig */,
+				"TEMP_4B3324EF-CB7C-4CB8-8CA1-DAE0910DE986" /* Signing.xcconfig */,
 			);
 			path = ios;
 			sourceTree = "<group>";
@@ -271,6 +274,7 @@
 				B8DFFFD5D5C461A7FF331B1C /* MessagesEvents.swift in Sources */,
 				24FF0AB0FADA07BC46517F7F /* MockData.swift in Sources */,
 				4C0C7008FD1DC231767DF8D9 /* Models.swift in Sources */,
+				9D43636E74A4E684EF799AAB /* MuseCompanion.swift in Sources */,
 				41D69F0EAB55E70DC97B02FF /* MusingApp.swift in Sources */,
 				538E3A28B28CE7D90832E57E /* MusingScreens.swift in Sources */,
 				E1074FF6CA6996A94B4367FC /* Notifier.swift in Sources */,
@@ -302,7 +306,7 @@
 /* Begin XCBuildConfiguration section */
 		6439779877C455273C3960F4 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = "TEMP_D34CFB61-5A6A-48DE-81E3-5B2A58E60A76" /* Signing.xcconfig */;
+			baseConfigurationReference = "TEMP_4B3324EF-CB7C-4CB8-8CA1-DAE0910DE986" /* Signing.xcconfig */;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
@@ -322,7 +326,7 @@
 		};
 		75ED0AA4A1E4DD7D3A5E2BAC /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = "TEMP_D34CFB61-5A6A-48DE-81E3-5B2A58E60A76" /* Signing.xcconfig */;
+			baseConfigurationReference = "TEMP_4B3324EF-CB7C-4CB8-8CA1-DAE0910DE986" /* Signing.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
@@ -344,7 +348,7 @@
 		};
 		A01E051343FC0473372CF236 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = "TEMP_D34CFB61-5A6A-48DE-81E3-5B2A58E60A76" /* Signing.xcconfig */;
+			baseConfigurationReference = "TEMP_4B3324EF-CB7C-4CB8-8CA1-DAE0910DE986" /* Signing.xcconfig */;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
@@ -364,7 +368,7 @@
 		};
 		D6C91F994409A2337C9319EB /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = "TEMP_D34CFB61-5A6A-48DE-81E3-5B2A58E60A76" /* Signing.xcconfig */;
+			baseConfigurationReference = "TEMP_4B3324EF-CB7C-4CB8-8CA1-DAE0910DE986" /* Signing.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";

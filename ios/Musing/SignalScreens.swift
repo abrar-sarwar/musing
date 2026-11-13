@@ -308,6 +308,7 @@ struct MusingScreen: View {
     @State private var error: String?
     @State private var joining: String?
     @State private var allMine = false
+    @StateObject private var mood = MuseMood()
 
     init(compose: Bool, tab: MusingTab = .send) {
         self.compose = compose
@@ -338,25 +339,37 @@ struct MusingScreen: View {
         }
         // any plan change anywhere: refetch. the server decides what this person may see.
         .onTableChange("plans") { Task { await load() } }
+        // `-muse_state reading|checking|writing|error` as a launch argument holds muse in that mood, for screenshots
+        .onAppear {
+            let stages: [String: MuseMood.Stage] = ["reading": .reading, "checking": .checking, "writing": .writing, "error": .error]
+            if let s = UserDefaults.standard.string(forKey: "muse_state").flatMap({ stages[$0] }) { mood.stage = s }
+        }
         // a thought handed over (run it back, a reel, a suggestion) goes to the composer
         .onChange(of: app.handoff) { if app.handoff != nil { tab = .send } }
     }
 
     private func page<C: View>(@ViewBuilder _ content: () -> C) -> some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: UI.gap) { content() }
-                .padding(.horizontal, UI.margin).padding(.top, 4).padding(.bottom, 40)
+        let inner = content()
+        return ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: UI.gap) { inner }
+                    .padding(.horizontal, UI.margin).padding(.top, 4).padding(.bottom, 40)
+            }
+            .scrollDismissesKeyboard(.interactively)
+            .refreshable { await load() }
+            // muse is working, or has something to show: bring it into view
+            .onChange(of: mood.stage) { if mood.stage != .idle, mood.stage != .asking { withAnimation { proxy.scrollTo("muse", anchor: .bottom) } } }
+            .onChange(of: mood.hasNews) { if mood.hasNews { Task { try? await Task.sleep(for: .milliseconds(350)); withAnimation { proxy.scrollTo("muse", anchor: .bottom) } } } }
+            .onChange(of: mood.freshPlanId) { if mood.freshPlanId != nil { Task { try? await Task.sleep(for: .milliseconds(500)); withAnimation { proxy.scrollTo("muse", anchor: .bottom) } } } }
         }
-        .scrollDismissesKeyboard(.interactively)
-        .refreshable { await load() }
     }
 
     @ViewBuilder private var sendTab: some View {
-        SignalComposer(autoFocus: compose && tab == .send) { id in
+        // the plan that comes back is shown by muse under the form, with a way in
+        SignalComposer(mood: mood, autoFocus: compose && tab == .send) { _ in
             Task { await load() }
-            app.push(.plan(id))
         }
-        if app.settings.museOn { SuggestCard() }
+        MuseCompanion(mood: mood, home: home).id("muse")
         TracePanel(planId: nil)
     }
 
