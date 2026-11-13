@@ -13,9 +13,8 @@ struct Reel: Identifiable, Hashable {
     /// a real clip bundled with the app, and the thought it hands to muse
     var video: URL? = nil
     var pitch: String? = nil
-    /// set for a reel from the fictional catalog: its id there, and a topic key for drawn art
-    var catalogId: String? = nil
-    var art: String? = nil
+    /// what the friends who liked it are after, for the card's line
+    var want: String? = nil
     /// the clip's still, when it is streamed from the server rather than bundled
     var posterURL: URL? = nil
 }
@@ -36,11 +35,10 @@ struct ReelLikeRow: Decodable {
 
 struct ReelsScreen: View {
     @EnvironmentObject var app: AppState
-    @State private var rows: [ReelRow] = []
     @State private var overlap: Overlap?
     @State private var status = "Loading…"
     // launch with `-reel video:band` to open on that reel (screenshots, demos)
-    @State private var current: String? = UserDefaults.standard.string(forKey: "reel")
+    @State private var current: String? = UserDefaults.standard.string(forKey: "reel").map { "0|\($0)" }
     @State private var liked: Set<String> = []
     @State private var saved: Set<String> = []
     @State private var dismissed = false
@@ -59,42 +57,31 @@ struct ReelsScreen: View {
             .map { Person(id: $0.user.id, name: $0.user.name, avatarSeed: $0.user.avatarSeed) }
     }
 
+    /// one screenful of the feed. the same clip comes round again under a new id.
+    private struct ReelPage: Identifiable { let id: String; let reel: Reel }
+    private static let rounds = 40
+
+    /// the feed never runs out: after the last clip the first one comes again
+    private var pages: [ReelPage] {
+        let list = reels
+        return (0..<Self.rounds).flatMap { round in list.map { ReelPage(id: "\(round)|\($0.id)", reel: $0) } }
+    }
+
     private var reels: [Reel] {
-        // one reel per topic so every reel has its own media; other people's reels only
-        let videos = Mock.videoReels.compactMap { v -> Reel? in
+        // real clips only, in the order Mock.videoReels lists them
+        Mock.videoReels.compactMap { v -> Reel? in
             // the bundled file when this build has it, otherwise the same clip streamed from the server
             let remote = remoteVideos[v.file]
             guard let url = v.url ?? remote?.video.flatMap(URL.init(string:)) else { return nil }
             let creator = User(id: "creator:\(v.creator)", name: v.creator, avatarSeed: v.creator, bio: nil, interests: [])
-            return Reel(id: "video:\(v.file)", topic: v.topic, user: creator, caption: v.caption, headline: "", poster: "reelvideo/\(v.file).jpg", video: url, pitch: v.pitch,
+            return Reel(id: "video:\(v.file)", topic: v.topic, user: creator, caption: v.caption, headline: "", poster: "reelvideo/\(v.file).jpg", video: url, pitch: v.pitch, want: v.want,
                         posterURL: v.url == nil ? remote?.poster.flatMap(URL.init(string:)) : nil)
         }
-        // a topic with a real clip does not also get a still
-        var seen = Set(videos.map(\.topic))
-        var out: [Reel] = []
-        for r in rows where r.userId != app.userId && !seen.contains(r.topic) {
-            seen.insert(r.topic)
-            let d = Mock.describeReel(r.topic)
-            out.append(Reel(id: "\(r.userId):\(r.topic)", topic: r.topic, user: r.user, caption: d.caption, headline: d.headline, poster: reelPoster(r.topic)))
-        }
-        // lead with something neutral so the overlap reel is discovered, not the first thing shown
-        if let t = overlap?.topic, let i = out.firstIndex(where: { $0.topic == t }), i != 1, out.count > 2 {
-            out.insert(out.remove(at: i), at: 1)
-        }
-        // the clips come right after one neutral still
-        out.insert(contentsOf: videos, at: min(1, out.count))
-        out = Array(out.prefix(14 + videos.count))
-        // catalog reels: fictional creators, spread through the feed two stills apart
-        let more = (app.catalog?.reels ?? []).map { r in
-            Reel(id: "catalog:\(r.id)", topic: r.topic, user: User(id: "creator:\(r.creator)", name: r.creator, avatarSeed: r.creator, bio: nil, interests: []),
-                 caption: r.caption, headline: r.title, poster: r.poster ?? "", pitch: r.pitch, catalogId: r.id, art: r.tags.first)
-        }
-        for (i, r) in more.enumerated() { out.insert(r, at: min(out.count, 3 + i * 3)) }
-        return out
     }
 
     var body: some View {
-        let list = reels
+        let list = pages
+        let at = list.firstIndex { $0.id == (current ?? list.first?.id) } ?? 0
         ZStack(alignment: .top) {
             Color.black.ignoresSafeArea()
             if list.isEmpty {
@@ -102,10 +89,11 @@ struct ReelsScreen: View {
             } else {
                 ScrollView {
                     LazyVStack(spacing: 0) {
-                        ForEach(list) { reel in
-                            page(reel, isCurrent: (current ?? list.first?.id) == reel.id)
+                        ForEach(Array(list.enumerated()), id: \.element.id) { i, p in
+                            // a player exists only for the page on screen and its neighbours
+                            page(p.reel, isCurrent: i == at, near: abs(i - at) <= 1)
                                 .containerRelativeFrame([.horizontal, .vertical])
-                                .id(reel.id)
+                                .id(p.id)
                         }
                     }
                     .scrollTargetLayout()
@@ -118,7 +106,6 @@ struct ReelsScreen: View {
             FbHeader(title: "Reels", actions: [.more, .search, .messenger], dark: true)
         }
         .task(id: app.version) { await load() }
-        .task { if app.catalog == nil { await app.loadCatalog() } }
         .task {
             // only ask for links when a clip is missing from this build
             guard Mock.videoReels.contains(where: { $0.url == nil }) else { return }
@@ -127,22 +114,20 @@ struct ReelsScreen: View {
     }
 
     private func load() async {
-        rows = []
         overlap = nil
         dismissed = false
         status = "Loading…"
         do {
             // the count comes from sql on the server: opted-in friends only, null below 3.
             async let o: OverlapResponse? = try? API.get("/api/overlap", user: app.userId)
-            let r: [ReelRow] = try await Supa.select("reels_topics", "select=*,user:users!reels_topics_user_id_fkey(*)&order=score.desc&limit=40")
-            let topics = Mock.videoReels.map { "\"\($0.topic)\"" }.joined(separator: ",")
-            async let l: [ReelLikeRow]? = try? Supa.select("reels_topics", "select=user_id,topic,user:users!reels_topics_user_id_fkey(id,name,avatar_seed,reels_opt_in)&topic=in.(\(topics))&order=score.desc")
+            // likes are only read for the clips that hand muse a thought
+            let topics = Mock.videoReels.filter { $0.pitch != nil }.map { "\"\($0.topic)\"" }.joined(separator: ",")
+            let l: [ReelLikeRow] = try await Supa.select("reels_topics", "select=user_id,topic,user:users!reels_topics_user_id_fkey(id,name,avatar_seed,reels_opt_in)&topic=in.(\(topics))&order=score.desc")
             async let f: [FriendEdge]? = try? Supa.select("friendships", "select=friend_id&user_id=eq.\(app.userId)")
             let ov = await o
-            let (likes, friends) = await (l, f)
+            let friends = await f
             guard !Task.isCancelled else { return }
-            rows = r
-            likeRows = likes ?? []
+            likeRows = l
             friendIds = Set((friends ?? []).map(\.friendId))
             dismissedLikes = []
             overlap = ov?.overlap
@@ -153,16 +138,17 @@ struct ReelsScreen: View {
         }
     }
 
-    private func page(_ item: Reel, isCurrent: Bool) -> some View {
-        let friends = item.video == nil ? [] : likers(item.topic)
+    private func page(_ item: Reel, isCurrent: Bool, near: Bool) -> some View {
+        // a clip with nothing to hand muse shows no card at all
+        let friends = item.pitch == nil ? [] : likers(item.topic)
         let likes = 900 + stableHash(item.id) % 140000 + friends.count
         return ZStack {
-            CoverArt(path: item.poster, topic: item.art)
+            CoverArt(path: item.poster, topic: item.topic)
             if let poster = item.posterURL {
                 AsyncImage(url: poster) { image in image.resizable().scaledToFill() } placeholder: { Color.black }
                     .frame(maxWidth: .infinity, maxHeight: .infinity).clipped()
             }
-            if let url = item.video {
+            if let url = item.video, near {
                 ReelVideo(url: url, playing: isCurrent && app.tab == .reels && scenePhase == .active, muted: muted)
                     .contentShape(Rectangle())
                     .onTapGesture { muted.toggle() }
@@ -177,22 +163,8 @@ struct ReelsScreen: View {
                     VStack(alignment: .leading, spacing: 0) {
                         if !friends.isEmpty, isCurrent, !dismissedLikes.contains(item.id) {
                             FriendsLikedCard(friends: friends, reel: item) { dismissedLikes.insert(item.id) }
-                        } else if friends.isEmpty, let overlap, item.topic == overlap.topic, isCurrent, !dismissed {
+                        } else if item.pitch != nil, let overlap, item.topic == overlap.topic, isCurrent, !dismissed {
                             OverlapCard(overlap: overlap) { dismissed = true }
-                        } else if let catalogId = item.catalogId, isCurrent {
-                            // nothing happens from watching. a thought only starts when this is tapped.
-                            Button {
-                                app.makeAMove(item.pitch ?? "this could be us: \(item.topic)", from: SignalContext(kind: "reel", id: catalogId, title: "a reel about \(item.topic)"))
-                            } label: {
-                                HStack(spacing: 6) {
-                                    MuseFace(expression: .awake, size: 20)
-                                    Text("this could be us").font(.system(size: 14.5, weight: .bold))
-                                }
-                                .foregroundStyle(Muse.text).padding(.vertical, 8).padding(.horizontal, 12)
-                                .background(Color(hex: 0xfaf7ff, alpha: 0.96), in: Capsule())
-                            }
-                            .buttonStyle(FadePress()).padding(.bottom, 12)
-                            .accessibilityIdentifier("reel-make-a-move")
                         }
                         HStack(spacing: 10) {
                             Avatar(item.user, size: 38)
@@ -281,11 +253,13 @@ struct FriendsLikedCard: View {
 
     private var names: [String] { friends.map { firstName($0.name) } }
     private var line: String {
+        // "jo, alex and mina also want to explore chicago", or "liked this" when the clip names no wish
+        let tail = reel.want.map { "also want\(names.count == 1 ? "s" : "") to \($0)" } ?? "liked this"
         switch names.count {
-        case 1: return "\(names[0]) liked this"
-        case 2: return "\(names[0]) and \(names[1]) liked this"
-        case 3: return "\(names[0]), \(names[1]) and \(names[2]) liked this"
-        default: return "\(names[0]), \(names[1]) and \(names.count - 2) other friends liked this"
+        case 1: return "\(names[0]) \(tail)"
+        case 2: return "\(names[0]) and \(names[1]) \(tail)"
+        case 3: return "\(names[0]), \(names[1]) and \(names[2]) \(tail)"
+        default: return "\(names[0]), \(names[1]) and \(names.count - 2) other friends \(tail)"
         }
     }
     private var crew: String {

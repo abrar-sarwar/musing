@@ -35,7 +35,7 @@ export const USERS: SeedUser[] = [
     interests: ["thrifting", "vintage denim", "record stores", "coffee"],
     free_windows: [sat("12:00", "18:00"), sun("10:00", "14:00")],
     reels_opt_in: true,
-    reels: [["thrifting", 8], ["vinyl", 5], ["coffee", 3], ["vintage popups", 6]],
+    reels: [["thrifting", 8], ["vinyl", 5], ["coffee", 3], ["vintage popups", 6], ["gym", 3], ["exploring chicago", 4]],
   },
   {
     id: "jo",
@@ -44,7 +44,7 @@ export const USERS: SeedUser[] = [
     interests: ["thrifting", "upcycling", "sewing", "bakeries"],
     free_windows: [sat("10:00", "16:00"), sun("13:00", "18:00")],
     reels_opt_in: true,
-    reels: [["thrifting", 7], ["sewing", 6], ["baking", 2], ["vintage popups", 7]],
+    reels: [["thrifting", 7], ["sewing", 6], ["baking", 2], ["vintage popups", 7], ["exploring chicago", 5]],
   },
   {
     id: "sam",
@@ -53,7 +53,7 @@ export const USERS: SeedUser[] = [
     interests: ["thrifting", "flea markets", "film", "ramen", "movie nights"],
     free_windows: [fri("18:00", "23:00"), sat("12:00", "22:00")],
     reels_opt_in: true,
-    reels: [["thrifting", 6], ["film", 5], ["ramen", 3], ["starting a band", 4]],
+    reels: [["thrifting", 6], ["film", 5], ["ramen", 3], ["starting a band", 4], ["fortnite", 5], ["go karting", 6]],
   },
   {
     id: "priya",
@@ -62,7 +62,7 @@ export const USERS: SeedUser[] = [
     interests: ["thrifting", "brunch", "rooftop parties", "yoga", "salsa dancing"],
     free_windows: [fri("18:00", "23:00"), sun("11:00", "15:00")],
     reels_opt_in: true,
-    reels: [["thrifting", 4], ["brunch", 6], ["yoga", 3], ["cafe photoshoots", 6]],
+    reels: [["thrifting", 4], ["brunch", 6], ["yoga", 3], ["cafe photoshoots", 6], ["gym", 3], ["exploring chicago", 3]],
   },
   {
     id: "dev",
@@ -71,7 +71,7 @@ export const USERS: SeedUser[] = [
     interests: ["climbing", "hiking", "coffee", "gadgets", "pickup basketball", "coding", "camping"],
     free_windows: [fri("18:00", "22:00"), sat("08:00", "14:00"), sun("08:00", "16:00")],
     reels_opt_in: true,
-    reels: [["climbing", 8], ["hiking", 5], ["gadgets", 4], ["starting a band", 6]],
+    reels: [["climbing", 8], ["hiking", 5], ["gadgets", 4], ["starting a band", 6], ["gym", 5], ["fortnite", 6]],
   },
   {
     id: "noor",
@@ -80,7 +80,7 @@ export const USERS: SeedUser[] = [
     interests: ["vintage", "thrifting", "museums", "tea", "book clubs"],
     free_windows: [sat("13:00", "17:00")],
     reels_opt_in: false,
-    reels: [["thrifting", 5], ["museums", 4]],
+    reels: [["thrifting", 5], ["museums", 4], ["exploring chicago", 4]],
   },
   {
     id: "theo",
@@ -89,7 +89,7 @@ export const USERS: SeedUser[] = [
     interests: ["live music", "karaoke", "bars", "trivia", "guitar", "sneakers"],
     free_windows: [fri("19:00", "23:00"), sat("19:00", "23:00")],
     reels_opt_in: true,
-    reels: [["karaoke", 7], ["concerts", 6], ["starting a band", 8]],
+    reels: [["karaoke", 7], ["concerts", 6], ["starting a band", 8], ["go karting", 7]],
   },
   {
     id: "lena",
@@ -107,7 +107,7 @@ export const USERS: SeedUser[] = [
     interests: ["running", "pickleball", "smoothies", "beach", "pickup basketball", "volleyball"],
     free_windows: [sat("07:00", "15:00"), sun("07:00", "11:00")],
     reels_opt_in: true,
-    reels: [["running", 7], ["pickleball", 6], ["cafe photoshoots", 4]],
+    reels: [["running", 7], ["pickleball", 6], ["cafe photoshoots", 4], ["gym", 7], ["go karting", 4]],
   },
   {
     id: "ravi",
@@ -116,7 +116,7 @@ export const USERS: SeedUser[] = [
     interests: ["board games", "dim sum", "anime", "puzzles", "video games", "coding"],
     free_windows: [fri("18:00", "23:00"), sat("12:00", "22:00"), sun("12:00", "20:00")],
     reels_opt_in: true,
-    reels: [["board games", 8], ["anime", 5], ["starting a band", 5]],
+    reels: [["board games", 8], ["anime", 5], ["starting a band", 5], ["fortnite", 9], ["go karting", 3]],
   },
   {
     id: "mina",
@@ -125,7 +125,7 @@ export const USERS: SeedUser[] = [
     interests: ["photography", "hiking", "picnics", "plants", "dogs"],
     free_windows: [sat("15:00", "19:00"), sun("09:00", "13:00")],
     reels_opt_in: true,
-    reels: [["photography", 8], ["hiking", 4], ["plants", 3], ["cafe photoshoots", 8], ["vintage popups", 4]],
+    reels: [["photography", 8], ["hiking", 4], ["plants", 3], ["cafe photoshoots", 8], ["vintage popups", 4], ["exploring chicago", 6]],
   },
   {
     id: "ollie",
@@ -134,7 +134,7 @@ export const USERS: SeedUser[] = [
     interests: ["cooking", "farmers markets", "wine", "cycling", "volunteering"],
     free_windows: [sun("09:00", "14:00")],
     reels_opt_in: false,
-    reels: [["cooking", 7], ["cycling", 3]],
+    reels: [["cooking", 7], ["cycling", 3], ["gym", 3]],
   },
 
   // ---- the rest of the network (not maya's friends) ----
@@ -163,7 +163,7 @@ export const USERS: SeedUser[] = [
     interests: ["film", "ramen", "anime"],
     free_windows: [sat("18:00", "23:00")],
     reels_opt_in: true,
-    reels: [["film", 8], ["anime", 4]],
+    reels: [["film", 8], ["anime", 4], ["fortnite", 6]],
   },
   {
     id: "luca",

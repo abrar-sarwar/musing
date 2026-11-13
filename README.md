@@ -50,7 +50,8 @@ verified current behavior: the api server runs on vercel at `https://musing-six.
 - **the web shell** at `/` does not sign in, so it errors on the hosted server. it is a local dev tool.
 - vercel deployment protection covers preview deployments only; the production address is public so phones can reach it.
 
-- **reel clips:** the four real clips are not in git (they are other creators' videos). they are in a private storage bucket, `reel-videos`, on the hosted database. a build that does not have the files bundled asks `GET /api/reels/videos` for signed links (six hours, demo sign-in required) and streams them. `cd web && pnpm reels:upload` puts the files from `ios/Musing/Resources/mock/reelvideo/` there again. a local stack runs without storage, so against a local server only a mac that has the files plays them and everyone else sees the stills.
+- **reel clips:** the ten real clips are not in git (they are other creators' videos). they are in a private storage bucket, `reel-videos`, on the hosted database. a build that does not have the files bundled asks `GET /api/reels/videos` for signed links (six hours, demo sign-in required) and streams them. `cd web && pnpm reels:upload` puts the files from `ios/Musing/Resources/mock/reelvideo/` there again. a local stack runs without storage, so against a local server only a mac that has the files plays them and everyone else sees the stills.
+- **reels tab:** the feed is those ten clips and nothing else, in the order `Mock.videoReels` (`ios/Musing/MockData.swift`) lists them: weird, ai, fortnite, gym, chicago, racing, then thrift flip, cafe photoshoot, band and vintage pop-up. each clip loops, and after the last clip the first comes round again. the first two are only clips: no card and nothing from muse. on the others a card names the opted-in friends who liked it ("kai, dev and 2 other friends also want to lock in at the gym") with "this could be us", which hands muse the clip's thought without naming anyone. the likes are seeded rows in `reels_topics`. the seeded stills and the catalog reels are no longer shown in this tab. status: builds for iphone and the likes are on the hosted database; not yet checked on a device.
 - **muse pictures:** the seven plush pictures are not in git either (supplied artwork). they are in a second private bucket, `muse-pictures`. a build without the files asks `GET /api/muse/pictures` once after sign-in (signed links, one hour, demo sign-in required), saves the pictures on the phone and keeps them; until they arrive, or against a local stack, muse is the drawn stand-in. `cd web && pnpm muse:upload` puts the files from `ios/Musing/Resources/mock/muse/` there again.
 
 ## running it on your own mac and phone (teammates)
@@ -101,7 +102,7 @@ muse plans with more than friends. before the mix, the server searches a fiction
 - a thought can start from a listing, a public event, a group or a reel ("make a move from this"). the app sends that context with the thought, so nothing is typed twice.
 - saving and joining are mock interactions for the acting person only. nothing is bought, reserved or sent to a seller, and nobody is joined to a group by muse.
 
-five thoughts to try as maya: "lowkey wanna go thrifting saturday" (event + group + listings), "i wanna do a room makeover" (listings + group), "make a move" on the photography reel or the camera listing (event + listing), "game night this weekend" (group + listing), "need something to do this weekend" (event).
+five thoughts to try as maya: "lowkey wanna go thrifting saturday" (event + group + listings), "i wanna do a room makeover" (listings + group), "make a move" on the camera listing (event + listing), "game night this weekend" (group + listing), "need something to do this weekend" (event).
 
 on a deployed server, `POST /api/reset` and `POST /api/settings` need an `x-admin-token` header matching `ADMIN_TOKEN`. a local dev server stays open.
 
@@ -113,7 +114,7 @@ verified current behavior: the catalog holds 61 public events, 51 groups, 102 ma
 - **search:** `web/lib/discover.ts` reads a thought for topics (with everyday wording: "hoop", "cheap fit", "take cute pictures"), the nouns in it ("monitor", "guitar"), a named day, "tonight" or "at night", "free", and money being tight or a stated budget. it filters first (the starter is free then, not cancelled, not sold or pending, not a private group they are not in), ranks second, and hands muse at most 3 events, 2 groups and 4 listings. a thought nothing fits returns nothing.
 - **the rehearsed lines still find what they found:** the original rows sort first on a tie, and `pnpm test:discover` pins the thrift line to the saturday vintage pop-up.
 - **not shown or recommended:** one cancelled event, two sold listings, one pending listing and two private groups are in the tables on purpose, so the filters have something to filter.
-- **reels:** the 20 catalog reels are fictional creators' clips. they are separate from `reels_topics` (a person's own consent-gated signal). watching one writes nothing; "this could be us" on a reel starts a thought only when tapped.
+- **reels:** the 20 catalog reels are fictional creators' clips. they are separate from `reels_topics` (a person's own consent-gated signal). watching one writes nothing; "this could be us" on a reel starts a thought only when tapped. the reels tab no longer shows them (it plays the real clips only); they stay in the catalog and in search.
 - **pictures:** a record with a fitting bundled photo uses it. the rest (every added listing) get drawn art from `ios/Musing/CoverArt.swift`: a soft gradient and a symbol for the topic.
 - **people:** a few seeded friends gained interests (basketball, coding, guitar, video games, volunteering, dance) and friday or saturday evening free time so more kinds of thought find a friend. friendships are unchanged.
 
@@ -194,7 +195,7 @@ when a plan reaches quorum its group chat is a real chat: members send messages,
 3. B: the ask is under "for you". tap **i'm down**. A's count moves to 1 of 2 without a name.
 4. B: switch to jo. tap **what if...**, choose the Sunday suggestion (or type "sunday instead?"), and under **just between us** type a budget. tap **ask muse**. both phones show "muse is reworking it", then the new plan. the budget is never mentioned.
 5. that makes two, so it flips to **it's happening** on both phones: names, the group chat with the plan card, and the mock event handoff.
-6. reels tab: scroll two reels and the friends overlap card slides in.
+6. reels tab: the first two clips show nothing from muse; on the fortnite, gym, chicago and racing clips a card names the friends who want the same thing. tap "this could be us".
 7. musing. tab: flip **muse** off and send a thought to show what's left without it.
 
 the story is one connected, transparently mocked facebook moment: inspiration → friends → seeded Event/Marketplace context → Messenger-style coordination → a shared experience.

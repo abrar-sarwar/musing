@@ -170,14 +170,17 @@ enum Mock {
         "bookstores": ("Left with six books", "came in for one"),
         "cycling": ("40k before breakfast", "legs are a rumor now"),
     ]
-    // real clips for the demo. the files live in Resources/mock/reelvideo, which is not in
-    // git (they are other creators' videos), so a build without them shows stills instead.
+    // the reels tab is these clips and nothing else, in this order, going round again after the
+    // last. the files live in Resources/mock/reelvideo; a build without them streams them.
     struct VideoReel {
         let file: String
         let topic: String
         let creator: String
         let caption: String
-        let pitch: String
+        /// what the friends who liked it are after ("explore chicago"). nil reads "liked this".
+        var want: String? = nil
+        /// the thought handed to muse. nil means the clip is only a clip: no card, nothing from muse.
+        var pitch: String? = nil
         var url: URL? {
             guard let base = Bundle.main.resourcePath else { return nil }
             let path = "\(base)/mock/reelvideo/\(file).mp4"
@@ -185,6 +188,12 @@ enum Mock {
         }
     }
     static let videoReels: [VideoReel] = [
+        VideoReel(file: "weird", topic: "no context", creator: "ajtolithdgdye", caption: "push-ups with the headphones on. that's it, that's the video"),
+        VideoReel(file: "ai", topic: "ai videos", creator: "creativestorydiy", caption: "the royal family welcomes four very different babies"),
+        VideoReel(file: "fortnite", topic: "fortnite", creator: "ryl6n", caption: "the whole squad in the lobby", want: "get the fortnite coin", pitch: "this could be us: squad up on fortnite and go get the coin"),
+        VideoReel(file: "gym", topic: "gym", creator: "shu1598", caption: "neon and unc core", want: "lock in at the gym", pitch: "this could be us: locking in at the gym together"),
+        VideoReel(file: "chicago", topic: "exploring chicago", creator: "Travel With Me", caption: "this is chicago", want: "explore chicago", pitch: "this could be us: a day exploring chicago"),
+        VideoReel(file: "racing", topic: "go karting", creator: "Allexhappyface", caption: "the start of an endurance race", want: "go racing", pitch: "this could be us: go-kart racing, loser buys dinner"),
         VideoReel(file: "thriftflip", topic: "thrifting", creator: "cherri.bb", caption: "thrift flip with me: an oversized shirt becomes a qipao-inspired top", pitch: "this could be us: a thrift flip day, find a shirt and remake it"),
         VideoReel(file: "cafeshoot", topic: "cafe photoshoots", creator: "ovng", caption: "when your client thinks differently", pitch: "this could be us: a cafe photoshoot, coffee and turns behind the camera"),
         VideoReel(file: "band", topic: "starting a band", creator: "cj.sendz", caption: "day 2 of starting a band. only up from here", pitch: "this could be us: starting a band, first jam session"),
