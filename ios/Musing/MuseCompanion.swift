@@ -44,6 +44,30 @@ private let defaultIdeas: [MuseIdea] = [
     "coffee run?", "boba later?", "thrift trip?", "anyone down to hoop?", "movie night?", "food spot?", "study sesh?", "game night?",
 ].map { MuseIdea(label: $0, fill: $0) }
 
+/// "musing." "musing.." "musing..." over and over, slowly, while muse works. each dot
+/// eases in and lifts a little as it arrives, then all three fade and it starts again.
+struct MusingDots: View {
+    var still = false
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 0.7)) { ctx in
+            // 1, 2, 3 dots, then a beat with none
+            let step = still ? 3 : Int(ctx.date.timeIntervalSinceReferenceDate / 0.7) % 4
+            HStack(alignment: .lastTextBaseline, spacing: 1.5) {
+                Text("musing")
+                ForEach(0..<3, id: \.self) { i in
+                    Text(".")
+                        .opacity(i < step ? 1 : 0)
+                        .offset(y: i < step ? 0 : 4)
+                        .animation(.spring(response: 0.5, dampingFraction: 0.6), value: step)
+                }
+            }
+            .font(.system(size: 17, weight: .semibold)).foregroundStyle(Muse.text)
+        }
+        .accessibilityElement().accessibilityLabel("muse is musing")
+    }
+}
+
 // ---------- the companion ----------
 
 struct MuseCompanion: View {
@@ -99,10 +123,7 @@ struct MuseCompanion: View {
 
     private var status: String {
         switch mood.stage {
-        case .reading: return "muse is mewing..."
-        case .checking: return "checking who's down..."
-        case .writing: return "putting it together..."
-        case .sending: return "sending it out..."
+        case .reading, .checking, .writing, .sending: return "musing" // shown with its dots, see MusingDots
         case .asking: return "muse has one question for you."
         case .error: return "that didn't go through."
         case .idle: break
@@ -110,7 +131,7 @@ struct MuseCompanion: View {
         switch state {
         case .mewed: return "mused."
         case .waiting: return "signal sent. waiting for your people..."
-        default: return "muse is musing..."
+        default: return "" // idle: muse just sleeps, no caption
         }
     }
 
@@ -156,12 +177,16 @@ struct MuseCompanion: View {
                 .frame(maxWidth: .infinity).frame(height: avatar + (state == .musing ? 64 : 14), alignment: .bottom)
             }
 
-            Text(status)
-                .font(state == .mewed ? .system(size: 22, weight: .heavy) : .system(size: 14, weight: .medium))
-                .foregroundStyle(state == .mewed ? FB.text : state == .error ? FB.red : FB.muted)
-                .multilineTextAlignment(.center)
-                .id(status).transition(.opacity)
-                .accessibilityAddTraits(.updatesFrequently)
+            if state == .mewing {
+                MusingDots(still: reduceMotion).transition(.opacity)
+            } else if !status.isEmpty {
+                Text(status)
+                    .font(state == .mewed ? .system(size: 22, weight: .heavy) : .system(size: 14, weight: .medium))
+                    .foregroundStyle(state == .mewed ? FB.text : state == .error ? FB.red : FB.muted)
+                    .multilineTextAlignment(.center)
+                    .id(status).transition(.opacity)
+                    .accessibilityAddTraits(.updatesFrequently)
+            }
 
             below
         }
