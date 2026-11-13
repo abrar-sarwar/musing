@@ -30,9 +30,15 @@ enum Config {
     static var tunnelBase: String? {
         guard var s = UserDefaults.standard.string(forKey: hostOverrideKey)?.trimmingCharacters(in: .whitespacesAndNewlines), !s.isEmpty else { return nil }
         while s.hasSuffix("/") { s.removeLast() }
-        if s.hasPrefix("http://") || s.hasPrefix("https://") { return s }
-        let isName = s.contains(".") && s.contains(where: \.isLetter) && !s.hasSuffix(".local") && !s.contains(":")
-        return isName ? "https://" + s : nil
+        if !(s.hasPrefix("http://") || s.hasPrefix("https://")) {
+            let isName = s.contains(".") && s.contains(where: \.isLetter) && !s.hasSuffix(".local") && !s.contains(":")
+            guard isName else { return nil }
+            s = "https://" + s
+        }
+        // the hosted api's own address is not a tunnel: its database lives at a different
+        // address, so sending both there breaks the database. use the built-in pair.
+        if let typed = URL(string: s)?.host?.lowercased(), let api = URL(string: values["API_URL"] ?? "")?.host?.lowercased(), typed == api { return nil }
+        return s
     }
 
     /// the address written into the app when it was built
