@@ -18,7 +18,6 @@ export async function POST(req: Request) {
   try {
     const body = (await req.json().catch(() => ({}))) as { museId?: unknown; audience?: unknown };
     // who muse may ask: friends (the default), or friends plus people who share a friend
-    const audience = body.audience === "mutual" ? "mutual" : "friends";
     const museId = typeof body.museId === "string" ? body.museId : "";
     const user = await requireUser();
     const settings = await getSettings();
@@ -28,6 +27,8 @@ export async function POST(req: Request) {
     const { data: muse } = await db.from("muses").select("*").eq("id", museId).eq("user_id", user.id).maybeSingle();
     const understood = UnderstandSchema.safeParse(muse?.understood);
     if (!muse || !understood.success) return Response.json({ ok: false, error: "muse hasn't read that thought yet" }, { status: 404 });
+    // the signal's own audience decides the pool. the body field is still read for older app builds.
+    const audience = muse.audience === "mutual" || body.audience === "mutual" ? "mutual" : "friends";
 
     // candidates are this person's friends and nobody else. the ids muse may use come from here.
     const { data: edges } = await db.from("friendships").select("friend_id").eq("user_id", user.id);
@@ -88,7 +89,7 @@ export async function POST(req: Request) {
       // chosen time, as long as that still leaves someone to ask.
       const free = r.data.picks.filter((p) => isFreeAt(candidates.find((c) => c.id === p.user_id)?.free_windows ?? [], r.data.when_day, r.data.when_time));
       const picks = free.length > 0 ? free : r.data.picks;
-      const planId = await createDraftFromMatch(muse.id as string, user.id, { ...r.data, picks });
+      const planId = await createDraftFromMatch(muse.id as string, user.id, { ...r.data, picks }, { waitFor: (muse.wait_for as number | null) ?? 2, expiresAt: (muse.expires_at as string | null) ?? null });
       send("done", { planId, source: r.source, latencyMs: r.latencyMs });
     });
   } catch (e) {

@@ -4,13 +4,14 @@ import { fail, requireUser } from "@/lib/http";
 import { sseResponse } from "@/lib/muse/sse";
 import { understand } from "@/lib/muse/understand";
 import { getSettings } from "@/lib/settings";
+import { expiresAt, parseAudience, parseWaitFor } from "@/lib/signals";
 import { firstName } from "@/lib/time";
 import { todayLine } from "@/lib/when";
 
-// POST { text, context? } -> sse: "muse" {museId}, "delta" {text}..., "done" {museId, understood, source, latencyMs}
+// POST { text, context?, audience?, waitFor?, expires? } -> sse: "muse" {museId}, "delta" {text}..., "done" {museId, understood, source, latencyMs}
 export async function POST(req: Request) {
   try {
-    const body = (await req.json().catch(() => ({}))) as { text?: unknown; context?: unknown };
+    const body = (await req.json().catch(() => ({}))) as { text?: unknown; context?: unknown; audience?: unknown; waitFor?: unknown; expires?: unknown };
     const text = typeof body.text === "string" ? body.text.trim() : "";
     if (text.length < 2 || text.length > 280) {
       return Response.json({ ok: false, error: "say a little more (2 to 280 characters)" }, { status: 400 });
@@ -23,7 +24,15 @@ export async function POST(req: Request) {
     // where the thought started (a listing, an event, a group, a reel), checked against the catalog
     const context = await validContext(body.context);
     const startedFrom = await describeContext(context);
-    const { data: muse, error } = await db.from("muses").insert({ user_id: user.id, raw_text: text, context }).select("id").single();
+    const { data: muse, error } = await db.from("muses").insert({
+      user_id: user.id,
+      raw_text: text,
+      context,
+      // an app that sends no audience predates signals: its thoughts stay between the person and muse
+      audience: body.audience === undefined ? "muse" : parseAudience(body.audience),
+      wait_for: parseWaitFor(body.waitFor),
+      expires_at: expiresAt(body.expires, new Date()),
+    }).select("id").single();
     if (error || !muse) throw new Error(error?.message ?? "insert failed");
 
     return sseResponse(async (send) => {

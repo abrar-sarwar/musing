@@ -27,6 +27,9 @@ export type Muse = {
   raw_text: string;
   understood: Understood | null;
   visibility: "just_friends";
+  audience: "friends" | "mutual" | "muse"; // who the signal is shown to. muse = nobody but muse
+  wait_for: number; // how many friends have to be in
+  expires_at: string | null;
   created_at: string;
 };
 
@@ -43,7 +46,8 @@ export type Understood = {
 
 // draft: only the starter has seen it. faded: quorum became impossible, ends quietly.
 export type PlanState = "draft" | "proposing" | "happening" | "faded";
-export type MemberStatus = "pending" | "down" | "out";
+// maybe: a private answer that is neither a yes nor a no.
+export type MemberStatus = "pending" | "down" | "maybe" | "out";
 
 export type Plan = {
   id: string;
@@ -64,6 +68,7 @@ export type Plan = {
   public_event_id: string | null; // set when the plan is to go to a public event. its time and place are fixed.
   quorum: number;
   muse_on: boolean;
+  expires_at: string | null; // a plan that is not real by then fades
   created_at: string;
   updated_at: string;
 };
@@ -150,6 +155,9 @@ export type PlanView = {
   pitch: string | null; // starter only
   note: string | null; // muse's line after a re-solve. no names, no reasons
   quorum: number; // friends needed
+  waitFor: number; // the same number, as the starter chose it
+  expiresAt: string | null;
+  completed: boolean; // it happened: it's real and its start time has passed
   invited: number;
   downCount: number;
   picks: Array<{ user: Person; reason: string | null }> | null; // starter only
@@ -173,6 +181,24 @@ export type MusingHome = {
   asks: PlanView[]; // plans where someone's thought reached me
   mine: PlanView[]; // plans i started
   muses: Muse[]; // my own past thoughts
+  signals: SignalView[]; // my own signals, newest first
+  friendSignals: SignalView[]; // signals friends chose to share with me
+};
+
+// one signal, shaped for one viewer. who is in is only ever a count.
+export type SignalView = {
+  id: string;
+  author: Person;
+  text: string;
+  createdAt: string;
+  expiresAt: string | null;
+  audience: "friends" | "mutual" | "muse";
+  waitFor: number;
+  mine: boolean;
+  planId: string | null; // only for the author, or someone already on the plan
+  planState: PlanState | null;
+  inCount: number;
+  joined: boolean;
 };
 
 export type Suggestion = { suggestion: string; why: string; source: "live" | "cache" };

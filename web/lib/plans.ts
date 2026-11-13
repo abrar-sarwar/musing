@@ -6,7 +6,8 @@ import type { Matched } from "@/lib/muse/match";
 import { cacheGet, cachePut, generateImage } from "@/lib/muse/run";
 import { getSettings } from "@/lib/settings";
 import { firstName } from "@/lib/time";
-import type { MemberStatus, Muse, MusingHome, Person, Plan, PlanMember, PlanView, User } from "@/lib/types";
+import { canSeeSignal, isExpired, outcome, parseAudience, quorumFor, type Audience } from "@/lib/signals";
+import type { MemberStatus, Muse, MusingHome, Person, Plan, PlanMember, PlanView, SignalView, User } from "@/lib/types";
 import { isDay, isFreeAt, isTime, nextOccurrence, todayLine } from "@/lib/when";
 
 // the plan engine. every rule about who may see what lives in this file.
@@ -30,6 +31,7 @@ export async function loadBundle(planId: string): Promise<Bundle | null> {
   const { data: plan, error } = await db.from("plans").select("*").eq("id", planId).maybeSingle();
   if (error) throw new Error(`plan: ${error.message}`);
   if (!plan) return null;
+  await fadeIfExpired(plan as Plan);
   const [{ data: members, error: e2 }, { data: muse }] = await Promise.all([
     db.from("plan_members").select("*").eq("plan_id", planId),
     db.from("muses").select("raw_text").eq("id", plan.muse_id).maybeSingle(),
@@ -46,6 +48,16 @@ export async function loadBundle(planId: string): Promise<Bundle | null> {
   };
 }
 
+// a plan that never became real by its signal's expiry ends the same quiet way an
+// impossible quorum does. checked on every read, so every screen and every answer sees it.
+async function fadeIfExpired(plan: Plan): Promise<void> {
+  if ((plan.state !== "draft" && plan.state !== "proposing") || !isExpired(plan.expires_at, new Date())) return;
+  const now = new Date().toISOString();
+  await serverDb().from("plans").update({ state: "faded", updated_at: now }).eq("id", plan.id).eq("state", plan.state);
+  plan.state = "faded";
+  plan.updated_at = now;
+}
+
 // shape one plan for one viewer. returns null when the viewer has no business seeing it.
 async function buildView(b: Bundle, viewerId: string): Promise<PlanView | null> {
   const { plan, members, users } = b;
@@ -58,6 +70,13 @@ async function buildView(b: Bundle, viewerId: string): Promise<PlanView | null> 
 
   const down = members.filter((m) => m.status === "down");
   const happening = plan.state === "happening";
+
+  // it happened: real, and the start time is behind us
+  let completed = false;
+  if (happening && plan.event_id) {
+    const { data: ev } = await serverDb().from("events").select("starts_at").eq("id", plan.event_id).maybeSingle();
+    completed = Boolean(ev?.starts_at) && Date.parse(ev!.starts_at as string) < Date.now();
+  }
 
   let privateLimit: string | null = null;
   if (mine) {
@@ -80,6 +99,9 @@ async function buildView(b: Bundle, viewerId: string): Promise<PlanView | null> 
     pitch: isStarter ? plan.pitch : null,
     note: plan.note,
     quorum: plan.quorum,
+    waitFor: plan.quorum,
+    expiresAt: plan.expires_at ?? null,
+    completed,
     invited: members.length,
     downCount: down.length,
     // the starter sees who muse picked and why. never who answered what.
@@ -126,17 +148,159 @@ export async function getHome(viewerId: string): Promise<MusingHome> {
     views((started ?? []).map((p) => p.id as string)),
     views((memberOf ?? []).map((m) => m.plan_id as string)),
   ]);
+  const { signals, friendSignals } = await signalsFor(viewerId, (muses ?? []) as Muse[]);
   return {
     settings,
     mine,
     asks: asks.filter((a) => a.state === "proposing" || a.state === "happening"),
     muses: (muses ?? []) as Muse[],
+    signals,
+    friendSignals,
   };
+}
+
+// ---------- signals: a thought the author chose to show friends ----------
+
+const FRIEND_SIGNALS = 20;
+
+async function friendIdsOf(userId: string): Promise<string[]> {
+  const { data, error } = await serverDb().from("friendships").select("friend_id").eq("user_id", userId);
+  if (error) throw new Error(`friends: ${error.message}`);
+  return (data ?? []).map((e) => e.friend_id as string);
+}
+
+// how the viewer stands to an author: a friend, someone who shares a friend, or nobody
+async function relationTo(viewerId: string, authorId: string): Promise<"self" | "friend" | "mutual" | "none"> {
+  if (viewerId === authorId) return "self";
+  const mine = await friendIdsOf(viewerId);
+  if (mine.includes(authorId)) return "friend";
+  if (mine.length === 0) return "none";
+  const { data } = await serverDb().from("friendships").select("user_id").in("user_id", mine).eq("friend_id", authorId).limit(1);
+  return data && data.length > 0 ? "mutual" : "none";
+}
+
+// the newest plan made from a signal that has not faded. a faded one no longer counts.
+async function livePlans(museIds: string[]): Promise<Map<string, Plan>> {
+  const out = new Map<string, Plan>();
+  if (museIds.length === 0) return out;
+  const { data, error } = await serverDb().from("plans").select("*").in("muse_id", museIds).order("created_at", { ascending: true });
+  if (error) throw new Error(`plans: ${error.message}`);
+  for (const p of (data ?? []) as Plan[]) {
+    await fadeIfExpired(p);
+    out.set(p.muse_id, p); // later rows win: the newest plan for that signal
+  }
+  return out;
+}
+
+async function signalsFor(viewerId: string, own: Muse[]): Promise<{ signals: SignalView[]; friendSignals: SignalView[] }> {
+  const db = serverDb();
+  const now = new Date();
+  const friends = await friendIdsOf(viewerId);
+  let theirs: Muse[] = [];
+  if (friends.length > 0) {
+    const { data: hops } = await db.from("friendships").select("friend_id").in("user_id", friends);
+    const known = new Set([viewerId, ...friends]);
+    const mutuals = [...new Set((hops ?? []).map((h) => h.friend_id as string).filter((id) => !known.has(id)))];
+    const [{ data: a }, { data: b }] = await Promise.all([
+      db.from("muses").select("*").in("user_id", friends).in("audience", ["friends", "mutual"]).order("created_at", { ascending: false }).limit(FRIEND_SIGNALS),
+      mutuals.length > 0
+        ? db.from("muses").select("*").in("user_id", mutuals).eq("audience", "mutual").order("created_at", { ascending: false }).limit(FRIEND_SIGNALS)
+        : Promise.resolve({ data: [] as Muse[] }),
+    ]);
+    theirs = [...((a ?? []) as Muse[]), ...((b ?? []) as Muse[])].filter((m) => !isExpired(m.expires_at, now));
+  }
+  const all = [...own, ...theirs];
+  if (all.length === 0) return { signals: [], friendSignals: [] };
+  const ids = all.map((m) => m.id);
+  const plans = await livePlans(ids);
+  const planIds = [...plans.values()].map((p) => p.id);
+  const [{ data: interest }, { data: members }, { data: authors }] = await Promise.all([
+    db.from("signal_interest").select("muse_id,user_id").in("muse_id", ids),
+    planIds.length > 0 ? db.from("plan_members").select("plan_id,user_id,status").in("plan_id", planIds) : Promise.resolve({ data: [] as Array<{ plan_id: string; user_id: string; status: string }> }),
+    db.from("users").select("*").in("id", [...new Set(all.map((m) => m.user_id))]),
+  ]);
+  const people = new Map(((authors ?? []) as User[]).map((u) => [u.id, u]));
+
+  const shape = (m: Muse): SignalView | null => {
+    const author = people.get(m.user_id);
+    if (!author) return null;
+    const mine = m.user_id === viewerId;
+    const plan = plans.get(m.id) ?? null;
+    const sent = plan && (plan.state === "proposing" || plan.state === "happening");
+    const rows = plan ? (members ?? []).filter((r) => r.plan_id === plan.id) : [];
+    const keen = (interest ?? []).filter((r) => r.muse_id === m.id).map((r) => r.user_id as string);
+    // once the plan is out, the people who are in are its yeses. before that, whoever raised a hand.
+    const inIds = sent ? rows.filter((r) => r.status === "down").map((r) => r.user_id as string) : keen;
+    const onPlan = rows.some((r) => r.user_id === viewerId);
+    return {
+      id: m.id,
+      author: person(author),
+      text: m.raw_text,
+      createdAt: m.created_at,
+      expiresAt: m.expires_at ?? null,
+      audience: parseAudience(m.audience),
+      waitFor: plan?.quorum ?? m.wait_for ?? QUORUM,
+      mine,
+      // a draft does not exist for anyone but its starter
+      planId: plan && (mine || (sent && onPlan)) ? plan.id : null,
+      planState: plan && (mine || sent) ? plan.state : null,
+      inCount: inIds.length,
+      joined: !mine && (keen.includes(viewerId) || inIds.includes(viewerId)),
+    };
+  };
+  const byNewest = (a: SignalView, b: SignalView) => b.createdAt.localeCompare(a.createdAt);
+  return {
+    signals: own.map(shape).filter((v): v is SignalView => v !== null).sort(byNewest),
+    // a friend's signal whose plan already faded has nothing left to join
+    friendSignals: theirs.filter((m) => plans.get(m.id)?.state !== "faded").map(shape).filter((v): v is SignalView => v !== null).sort(byNewest).slice(0, FRIEND_SIGNALS),
+  };
+}
+
+// a friend taps "i'm into this". counts as a yes on the signal's plan, now or once it is sent.
+export async function joinSignal(museId: string, userId: string): Promise<{ planId: string | null; settled: Settled | null }> {
+  const db = serverDb();
+  if (!/^[0-9a-f-]{36}$/i.test(museId)) throw new PlanError("signal not found", 404);
+  const { data: muse, error } = await db.from("muses").select("*").eq("id", museId).maybeSingle();
+  if (error) throw new Error(`signal: ${error.message}`);
+  const m = muse as Muse | null;
+  // someone the signal was never shown to gets the same answer as a signal that does not exist
+  if (!m || m.user_id === userId || isExpired(m.expires_at, new Date())) throw new PlanError("signal not found", 404);
+  if (!canSeeSignal(parseAudience(m.audience) as Audience, await relationTo(userId, m.user_id))) throw new PlanError("signal not found", 404);
+  const plan = (await livePlans([museId])).get(museId) ?? null;
+  if (plan?.state === "faded") throw new PlanError("signal not found", 404);
+
+  const { error: e1 } = await db.from("signal_interest").upsert({ muse_id: museId, user_id: userId }, { onConflict: "muse_id,user_id", ignoreDuplicates: true });
+  if (e1) throw new Error(`join: ${e1.message}`);
+  if (!plan || (plan.state !== "proposing" && plan.state !== "happening")) return { planId: null, settled: null };
+  await addAsDown(plan.id, [userId]);
+  if (plan.state === "happening" && plan.thread_id) await syncThreadMembers(plan.id, plan.thread_id, plan.starter_id);
+  return { planId: plan.id, settled: await settle(plan.id) };
+}
+
+// people who raised a hand become yeses on the plan. someone already asked keeps their
+// own row (and the ask muse wrote them); only the answer changes. never two rows.
+async function addAsDown(planId: string, userIds: string[]): Promise<void> {
+  if (userIds.length === 0) return;
+  const db = serverDb();
+  const now = new Date().toISOString();
+  const { data: have } = await db.from("plan_members").select("user_id").eq("plan_id", planId).in("user_id", userIds);
+  const already = new Set((have ?? []).map((r) => r.user_id as string));
+  if (already.size > 0) {
+    const { error } = await db.from("plan_members").update({ status: "down", updated_at: now }).eq("plan_id", planId).in("user_id", [...already]);
+    if (error) throw new Error(`join: ${error.message}`);
+  }
+  const fresh = userIds.filter((id) => !already.has(id));
+  if (fresh.length > 0) {
+    const { error } = await db.from("plan_members").upsert(fresh.map((id) => ({ plan_id: planId, user_id: id, status: "down", reason: "joined from the signal" })), { onConflict: "plan_id,user_id", ignoreDuplicates: true });
+    if (error) throw new Error(`join: ${error.message}`);
+  }
 }
 
 // ---------- creating ----------
 
-export async function createDraftFromMatch(museId: string, starterId: string, m: Matched): Promise<string> {
+export type SignalOpts = { waitFor: number; expiresAt: string | null };
+
+export async function createDraftFromMatch(museId: string, starterId: string, m: Matched, opts: SignalOpts = { waitFor: QUORUM, expiresAt: null }): Promise<string> {
   const db = serverDb();
   const { data: plan, error } = await db
     .from("plans")
@@ -150,7 +314,8 @@ export async function createDraftFromMatch(museId: string, starterId: string, m:
       when_time: m.when_time,
       where_text: lower(m.where_text),
       pitch: lower(m.hear_me_out),
-      quorum: Math.min(QUORUM, m.picks.length),
+      quorum: quorumFor(opts.waitFor, m.picks.length),
+      expires_at: opts.expiresAt,
       muse_on: true,
       // a plan built around a public event keeps that event's day, time and place
       public_event_id: m.event_id,
@@ -176,17 +341,17 @@ export async function createDraftFromMatch(museId: string, starterId: string, m:
 
 // muse off: what's left is a plain poll. no mix, no reasons, no re-solve. it goes
 // to the first few friends as typed.
-export async function createPoll(starterId: string, text: string): Promise<string> {
+export async function createPoll(starterId: string, text: string, opts: SignalOpts & { audience: Audience } = { waitFor: QUORUM, expiresAt: null, audience: "muse" }): Promise<string> {
   const db = serverDb();
   const { data: edges, error: e0 } = await db.from("friendships").select("friend_id").eq("user_id", starterId).order("friend_id").limit(POLL_INVITES);
   if (e0) throw new Error(`friends: ${e0.message}`);
   const friendIds = (edges ?? []).map((e) => e.friend_id as string);
   if (friendIds.length === 0) throw new PlanError("no friends to ask yet");
-  const { data: muse, error: e1 } = await db.from("muses").insert({ user_id: starterId, raw_text: text }).select("id").single();
+  const { data: muse, error: e1 } = await db.from("muses").insert({ user_id: starterId, raw_text: text, audience: opts.audience, wait_for: opts.waitFor, expires_at: opts.expiresAt }).select("id").single();
   if (e1 || !muse) throw new Error(`muse insert: ${e1?.message}`);
   const { data: plan, error } = await db
     .from("plans")
-    .insert({ muse_id: muse.id, starter_id: starterId, state: "proposing", activity: text, quorum: Math.min(QUORUM, friendIds.length), muse_on: false })
+    .insert({ muse_id: muse.id, starter_id: starterId, state: "proposing", activity: text, quorum: quorumFor(opts.waitFor, friendIds.length), expires_at: opts.expiresAt, muse_on: false })
     .select("id")
     .single();
   if (error || !plan) throw new Error(`plan insert: ${error?.message}`);
@@ -197,16 +362,25 @@ export async function createPoll(starterId: string, text: string): Promise<strin
 
 // ---------- starter actions ----------
 
-export async function sendPlan(planId: string, userId: string): Promise<void> {
-  const { data, error } = await serverDb()
+export async function sendPlan(planId: string, userId: string): Promise<Settled> {
+  const db = serverDb();
+  // loading it first fades a draft whose signal already ran out, so it cannot be sent
+  await loadBundle(planId);
+  const { data, error } = await db
     .from("plans")
     .update({ state: "proposing", updated_at: new Date().toISOString() })
     .eq("id", planId)
     .eq("starter_id", userId)
     .eq("state", "draft")
-    .select("id");
+    .select("id,muse_id");
   if (error) throw new Error(`send: ${error.message}`);
   if (!data || data.length === 0) throw new PlanError("nothing to send", 409);
+  // friends who already said "i'm into this" on the signal go in as yeses
+  const { data: keen } = await db.from("signal_interest").select("user_id").eq("muse_id", data[0].muse_id as string);
+  const ids = (keen ?? []).map((r) => r.user_id as string).filter((id) => id !== userId);
+  if (ids.length === 0) return { state: "proposing", becameReal: false };
+  await addAsDown(planId, ids);
+  return settle(planId);
 }
 
 // "not this" on a draft, or quietly calling it off before it's real.
@@ -220,7 +394,7 @@ export async function cancelPlan(planId: string, userId: string): Promise<void> 
 
 export type Settled = { state: Plan["state"]; becameReal: boolean };
 
-export async function respond(planId: string, userId: string, status: Extract<MemberStatus, "down" | "out">): Promise<Settled> {
+export async function respond(planId: string, userId: string, status: Extract<MemberStatus, "down" | "maybe" | "out">): Promise<Settled> {
   const db = serverDb();
   const b = await loadBundle(planId);
   if (!b) throw new PlanError("plan not found", 404);
@@ -245,17 +419,16 @@ async function settle(planId: string): Promise<Settled> {
   const now = new Date().toISOString();
   const { data: plan } = await db.from("plans").select("state,quorum,version").eq("id", planId).single();
   const { data: members } = await db.from("plan_members").select("status").eq("plan_id", planId);
-  const list = members ?? [];
-  const down = list.filter((m) => m.status === "down").length;
-  const out = list.filter((m) => m.status === "out").length;
   const quorum = (plan?.quorum as number) ?? QUORUM;
+  // a maybe is neither: it never makes the plan real and never rules it out
+  const result = outcome((members ?? []).map((m) => m.status as string), quorum);
 
-  if (plan?.state === "proposing" && down >= quorum) {
+  if (plan?.state === "proposing" && result === "happening") {
     // conditional update: only one request wins the transition, so the event is made once
     const { data: won } = await db.from("plans").update({ state: "happening", updated_at: now }).eq("id", planId).eq("state", "proposing").select("id");
     return { state: "happening", becameReal: Boolean(won && won.length > 0) };
   }
-  if (plan?.state === "proposing" && list.length - out < quorum) {
+  if (plan?.state === "proposing" && result === "faded") {
     await db.from("plans").update({ state: "faded", updated_at: now }).eq("id", planId).eq("state", "proposing");
     return { state: "faded", becameReal: false };
   }
