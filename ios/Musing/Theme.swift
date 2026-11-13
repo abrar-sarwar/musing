@@ -26,15 +26,17 @@ enum FB {
 
 // musing. gets its own identity only inside musing. features: soft lavender to pink.
 enum Muse {
-    static let start = Color(hex: 0x8b5cf6)
-    static let end = Color(hex: 0xec4899)
-    static let soft = Color(hex: 0xf3eeff)
-    static let softer = Color(hex: 0xfaf7ff)
-    static let line = Color(hex: 0xe4d9ff)
-    static let text = Color(hex: 0x6d28d9)
+    // the accent is blue throughout. purple only survives as the far end of the button gradient.
+    private static let violet = Color(hex: 0x8b5cf6)
+    static let start = FB.blue
+    static let end = violet
+    static let soft = FB.blueSoft
+    static let softer = Color(hex: 0xf5f9ff)
+    static let line = Color(hex: 0xcfe1ff)
+    static let text = FB.blue
     static let dating = Color(hex: 0x6f3fd8)
-    static let gradient = LinearGradient(colors: [start, end], startPoint: .topLeading, endPoint: .bottomTrailing)
-    static let entryGradient = LinearGradient(colors: [FB.blue, start], startPoint: .leading, endPoint: .trailing)
+    static let gradient = LinearGradient(colors: [FB.blue, violet], startPoint: .topLeading, endPoint: .bottomTrailing)
+    static let entryGradient = LinearGradient(colors: [FB.blue, Color(hex: 0xa78bfa)], startPoint: .leading, endPoint: .trailing)
     /// the faint blue to lavender wash behind a musing. card that leads somewhere
     static let wash = LinearGradient(colors: [Color(hex: 0xf1f6ff), Color(hex: 0xf7f2ff)], startPoint: .leading, endPoint: .trailing)
 }

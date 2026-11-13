@@ -372,7 +372,8 @@ struct WhatIf: View {
         let limitChanged = l != (existingLimit ?? "")
         let canSend = !busy && (o.count > 1 || (limitChanged && l.count > 1))
         VStack(alignment: .leading, spacing: 8) {
-            Text(Copy.whatIf).font(.system(size: 14, weight: .bold)).foregroundStyle(FB.text)
+            Text(Copy.whatIf).font(.system(size: 22, weight: .bold)).foregroundStyle(FB.text)
+            Text("Suggest any changes or preferences. Muse adjusts the plan and re-confirms with everyone.").font(UI.meta).foregroundStyle(FB.muted).fixedSize(horizontal: false, vertical: true).padding(.bottom, 4)
             field("Sunday instead? Somewhere closer?", $offer, FB.input)
             if !suggestions.isEmpty {
                 // stacked, not wrapped: each idea is a full sentence
@@ -400,13 +401,11 @@ struct WhatIf: View {
             if busy || !stream.isEmpty { MuseBubble(text: stream, thinking: busy, label: busy ? Copy.solving : nil) }
             if let error { Text("muse couldn't rework it (\(error)). the plan stays as it was.").font(.system(size: 14)).foregroundStyle(FB.red) }
 
-            HStack(spacing: 8) {
-                QuietButton(label: "Never mind", disabled: busy, action: onClose)
-                GradientButton(label: busy ? "Reworking" : "Ask muse", busy: busy, disabled: !canSend, fill: true) {
-                    Task { await send(offer: o, limit: limitChanged ? l : nil) }
-                }
+            GradientButton(label: busy ? "Reworking" : "Ask Muse privately", big: true, busy: busy, disabled: !canSend) {
+                Task { await send(offer: o, limit: limitChanged ? l : nil) }
             }
             .padding(.top, 6)
+            QuietButton(label: "Never mind", disabled: busy, fill: true, action: onClose)
         }
     }
 
@@ -455,6 +454,13 @@ struct PlanScreen: View {
     // `-whatif YES` as a launch argument opens the box straight away, for screenshots
     @State private var whatIfOpen = UserDefaults.standard.bool(forKey: "whatif")
     @State private var matchedOpen = true
+    /// what this person last saw of this plan, read once before the plan is marked seen:
+    /// it is what "what changed" compares against, and why the card still shows as news here
+    @State private var before: PlanSeen.Mark?
+    @State private var wasUnread = false
+    @State private var checkedSeen = false
+    /// someone who already answered sees their answer and one button to change it
+    @State private var changing = false
 
     var body: some View {
         SubScreen(title: title, trailing: trailing) {
@@ -478,6 +484,30 @@ struct PlanScreen: View {
         }
         // live: the other phone's answer or a re-solve shows up here within a second or two
         .onTableChange("plans") { Task { await load() } }
+        // "what if..." is a popup over the plan, not another page
+        .overlay {
+            if whatIfOpen, let p = plan, p.state == "proposing" {
+                ZStack {
+                    Color.black.opacity(0.45).ignoresSafeArea().onTapGesture { whatIfOpen = false }
+                    ScrollView {
+                        WhatIf(planId: p.id, existingLimit: p.me?.privateLimit, suggestions: p.whatIfs ?? [], onDone: {
+                            Task {
+                                await load()
+                                whatIfOpen = false
+                                changing = false
+                            }
+                        }, onClose: { whatIfOpen = false })
+                        .padding(UI.cardPad + 2)
+                        .background(Color.white, in: RoundedRectangle(cornerRadius: 18))
+                        .shadow(color: .black.opacity(0.18), radius: 24, y: 8)
+                        .padding(.horizontal, UI.margin).padding(.vertical, 60)
+                    }
+                    .scrollDismissesKeyboard(.interactively).scrollBounceBehavior(.basedOnSize)
+                }
+                .transition(.opacity)
+            }
+        }
+        .animation(.easeOut(duration: 0.18), value: whatIfOpen)
     }
 
     private var title: String {
@@ -489,7 +519,7 @@ struct PlanScreen: View {
     private var trailing: [(icon: String, label: String, action: () -> Void)] {
         var out: [(icon: String, label: String, action: () -> Void)] = []
         if let thread = plan?.threadId { out.append(("bubble.left.and.bubble.right", "Open the chat", { app.push(.thread(thread)) })) }
-        out.append(("calendar", "Events", { app.push(.events) }))
+        out.append(("calendar", "Calendar", { app.push(.calendar) }))
         return out
     }
 
@@ -499,6 +529,23 @@ struct PlanScreen: View {
         guard user == app.userId, !Task.isCancelled else { return }
         plan = p
         loading = false
+        guard let p else { return }
+        if !checkedSeen {
+            checkedSeen = true
+            before = PlanSeen.mark(of: p, user: user)
+            wasUnread = PlanSeen.isUnread(p, user: user)
+        }
+        // opening it is reading it
+        PlanSeen.see(p, user: user)
+    }
+
+    /// what moved since this person last looked: the day or time, the place
+    private func changes(_ p: PlanView) -> [(icon: String, from: String, to: String)] {
+        guard let before, before.version < p.version else { return [] }
+        var out: [(icon: String, from: String, to: String)] = []
+        if let was = before.when, let now = p.when, was != now { out.append(("calendar", sentenceCase(was), sentenceCase(now))) }
+        if let was = before.place, let now = p.where, was != now { out.append(("mappin.and.ellipse", sentenceCase(was), sentenceCase(now))) }
+        return out
     }
 
     private func act(_ name: String, leaveAfter: Bool = false, _ work: @escaping () async throws -> Void) {
@@ -532,7 +579,23 @@ struct PlanScreen: View {
         let myStatus = p.me?.status
         let who = firstName(p.starter.name)
 
-        PlanSummaryCard(plan: p, detail: true)
+        PlanSummaryCard(plan: p, detail: true, lookOverride: wasUnread ? .updated : nil)
+
+        let moved = changes(p)
+        if !moved.isEmpty {
+            Card {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("What changed").font(UI.cardTitle).foregroundStyle(FB.text)
+                    ForEach(Array(moved.enumerated()), id: \.offset) { _, c in
+                        HStack(alignment: .firstTextBaseline, spacing: 10) {
+                            Image(systemName: c.icon).font(.system(size: 14)).foregroundStyle(FB.muted).frame(width: 18)
+                            (Text(c.from).foregroundStyle(FB.text) + Text("  \u{2192}  ").foregroundStyle(FB.muted) + Text(c.to).foregroundStyle(FB.blue).fontWeight(.semibold))
+                                .font(UI.body).fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+            }
+        }
 
         // muse's voice: the pitch for a draft, the personal ask for a friend, the note after a re-solve
         let pitch = starter && p.state == "draft" ? p.pitch : nil
@@ -544,7 +607,7 @@ struct PlanScreen: View {
                 if let pitch { MuseBubble(text: pitch, label: Copy.pitchLead) }
                 if let ask { MuseBubble(text: ask) }
                 if let raw { Text("\(starter ? "You asked" : "\(who) asked"): \u{201C}\(raw)\u{201D}").font(.system(size: 16)).foregroundStyle(FB.text) }
-                if let note { MuseBubble(text: note, label: p.version > 1 ? "small update" : nil) }
+                if let note { MuseBubble(text: note, label: p.version > 1 ? "muse found another option" : nil) }
             }
         }
 
@@ -617,7 +680,13 @@ struct PlanScreen: View {
                 fine("Your signal is already out for friends to see and join. This step sends muse's private ask to each person above. Nobody sees who else was asked.")
             }
 
-            if !starter, open, !whatIfOpen {
+            if !starter, open, myStatus != "pending", !changing {
+                // already answered: the answer, and one way back to the choices
+                banner(myStatus == "down" ? "You're in." : myStatus == "maybe" ? "You said maybe." : "You passed.")
+                fine(myStatus == "down" ? "Only the count moved. Names show once it's on." : myStatus == "maybe" ? "Only you can see that, and it doesn't count either way." : "Nobody was told.")
+                QuietButton(label: "Change response", fill: true, outline: true) { changing = true }
+            }
+            if !starter, open, myStatus == "pending" || changing {
                 if myStatus == "down" {
                     banner("You're in.")
                 } else {
@@ -640,16 +709,6 @@ struct PlanScreen: View {
                 QuietButton(label: "Call it off quietly", fill: true, outline: true) { cancel() }
             }
 
-            if open, whatIfOpen {
-                Card {
-                    WhatIf(planId: p.id, existingLimit: p.me?.privateLimit, suggestions: p.whatIfs ?? [], onDone: {
-                        Task {
-                            await load()
-                            whatIfOpen = false
-                        }
-                    }, onClose: { whatIfOpen = false })
-                }
-            }
             if open, !p.museOn { fine("Muse is off for this one, so there's no \u{201C}what if\u{201D} and no quiet re-solve. It's a yes, a maybe or a no.") }
 
             if p.state == "happening" {

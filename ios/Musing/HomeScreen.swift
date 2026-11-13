@@ -382,8 +382,8 @@ struct MusingHomeCard: View {
                 Text(Copy.brand).font(.system(size: 13.5, weight: .heavy)).foregroundStyle(Muse.start)
                 if !app.settings.museOn { Text("Muse is off · plain poll").font(.system(size: 12)).foregroundStyle(FB.muted).padding(.leading, 6) }
             }
-            Text(Copy.composerTitle).font(UI.section).foregroundStyle(FB.text).padding(.top, 2)
-            Text(Copy.composerSub).font(UI.meta).foregroundStyle(FB.muted).lineLimit(1).minimumScaleFactor(0.85).padding(.top, 1)
+            Text(Copy.composerTitle).font(UI.section).foregroundStyle(FB.text).padding(.top, 6)
+            Text(Copy.composerSub).font(UI.meta).foregroundStyle(FB.muted).lineLimit(1).minimumScaleFactor(0.85).padding(.top, 3)
 
             // a plan in motion: one line, tappable. counts only, never who.
             if let state = pickHomeState(home) {
@@ -397,7 +397,7 @@ struct MusingHomeCard: View {
                     }
                     .padding(.horizontal, 12).frame(height: 36).background(Color.white.opacity(0.8), in: RoundedRectangle(cornerRadius: 8))
                 }
-                .buttonStyle(FadePress()).padding(.top, 8)
+                .buttonStyle(FadePress()).padding(.top, 12)
                 .accessibilityLabel("\(state.headline) \(state.sub)")
             }
 
@@ -410,16 +410,16 @@ struct MusingHomeCard: View {
                     .accessibilityLabel("type a thought for muse")
                 GradientButton(label: "Make a move") { move() }
             }
-            .padding(.top, 10)
+            .padding(.top, 12)
             Button { app.push(.musing(compose: false, tab: .plans)) } label: {
                 Text("View upcoming plans").font(.system(size: 15, weight: .semibold)).foregroundStyle(FB.blue)
                     .frame(maxWidth: .infinity).frame(height: UI.button)
                     .overlay(RoundedRectangle(cornerRadius: UI.buttonRadius).stroke(FB.blue.opacity(0.45), lineWidth: 1))
             }
-            .buttonStyle(FadePress()).padding(.top, 8)
+            .buttonStyle(FadePress()).padding(.top, 12)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
+        .padding(14)
         .background(Muse.wash, in: RoundedRectangle(cornerRadius: UI.cardRadius))
         .overlay(RoundedRectangle(cornerRadius: UI.cardRadius).stroke(Muse.line, lineWidth: 1))
         // anywhere on the card that is not one of its own controls opens musing.

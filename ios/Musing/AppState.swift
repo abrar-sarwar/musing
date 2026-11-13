@@ -12,6 +12,7 @@ enum Route: Hashable {
     case musing(compose: Bool, tab: MusingTab = .send), plan(String), discoverTogether(String), musingSettings, nudge, recap
     case groups, group(String), publicEvent(String)
     case developer
+    case calendar, availability
 }
 
 // tiny toast for mocked facebook actions, so nothing on screen is a dead button.

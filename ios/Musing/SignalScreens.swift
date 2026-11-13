@@ -83,7 +83,8 @@ struct SegmentChips: View {
                         .frame(maxWidth: .infinity).frame(height: 36)
                         .background(on ? FB.blueSoft : FB.button, in: Capsule())
                         .overlay(alignment: .topTrailing) {
-                            if item.0 == .plans, waiting, !on { Circle().fill(Muse.end).frame(width: 9, height: 9).offset(x: -6, y: 3) }
+                            // a red dot while a plan is new or changed and has not been opened
+                            if item.0 == .plans, waiting { Circle().fill(FB.badge).frame(width: 10, height: 10).overlay(Circle().stroke(Color.white, lineWidth: 1.5)).offset(x: -6, y: 2) }
                         }
                 }
                 .buttonStyle(FadePress())
@@ -197,30 +198,38 @@ func planKicker(_ p: PlanView) -> String {
 
 /// one plan: where it stands, what, when, where, who. the same card in the list and on the plan page.
 struct PlanSummaryCard: View {
+    @EnvironmentObject var app: AppState
     let plan: PlanView
     /// on the plan's own page the title is larger
     var detail = false
+    /// set by the plan's own page, which has already marked it seen but still wants it shown as news
+    var lookOverride: PlanLook?
 
     var body: some View {
-        let waitingOnMe = plan.role == "member" && plan.state == "proposing" && plan.me?.status == "pending"
-        Card {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 5) {
-                    Text(planKicker(plan)).font(UI.kicker).tracking(0.3).foregroundStyle(plan.state == "faded" ? FB.muted : Muse.text)
-                    Spacer(minLength: 0)
-                    if waitingOnMe, !detail { Circle().fill(Muse.end).frame(width: 9, height: 9).accessibilityLabel("waiting on your answer") }
-                }
-                Text(sentenceCase(plan.activity ?? "A plan")).font(detail ? .system(size: 22, weight: .bold) : UI.cardTitle).foregroundStyle(FB.text)
-                    .fixedSize(horizontal: false, vertical: true)
-                VStack(alignment: .leading, spacing: 8) {
-                    if let when = plan.when { MetaRow(icon: "calendar", text: sentenceCase(when)) }
-                    if let place = plan.where { MetaRow(icon: "mappin.and.ellipse", text: sentenceCase(place)) }
-                    MetaRow(icon: "person.2", text: "\(plan.role == "starter" ? "You" : firstName(plan.starter.name)) + \(friendCount(plan.invited)) invited")
-                    if plan.state == "draft" || plan.state == "proposing", let left = expiresIn(plan.expiresAt) { MetaRow(icon: "hourglass", text: sentenceCase(left)) }
-                }
-                PeopleChips(plan: plan).padding(.top, 2)
+        // each status has its own look: red outline for news, dashed for a draft, soft blue once it's on
+        let look = lookOverride ?? PlanLook.of(plan, user: app.userId)
+        let updated = look == .updated && PlanSeen.isUpdated(plan, user: app.userId)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 5) {
+                if let icon = look.icon { Image(systemName: icon).font(.system(size: 11, weight: .bold)).foregroundStyle(look.ink) }
+                Text(updated || (lookOverride == .updated && plan.version > 1) ? "UPDATED PLAN · \(plan.downCount)/\(plan.quorum) DOWN" : planKicker(plan))
+                    .font(UI.kicker).tracking(0.3).foregroundStyle(look.ink)
+                Spacer(minLength: 0)
             }
+            Text(sentenceCase(plan.activity ?? "A plan")).font(detail ? .system(size: 22, weight: .bold) : UI.cardTitle).foregroundStyle(FB.text)
+                .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: 8) {
+                if let when = plan.when { MetaRow(icon: "calendar", text: sentenceCase(when)) }
+                if let place = plan.where { MetaRow(icon: "mappin.and.ellipse", text: sentenceCase(place)) }
+                MetaRow(icon: "person.2", text: "\(plan.role == "starter" ? "You" : firstName(plan.starter.name)) + \(friendCount(plan.invited)) invited")
+                if plan.state == "draft" || plan.state == "proposing", let left = expiresIn(plan.expiresAt) { MetaRow(icon: "hourglass", text: sentenceCase(left)) }
+            }
+            PeopleChips(plan: plan).padding(.top, 2)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(UI.cardPad)
+        .background(look.fill, in: RoundedRectangle(cornerRadius: UI.cardRadius))
+        .overlay(look.border())
     }
 }
 
@@ -314,12 +323,13 @@ struct MusingScreen: View {
         _tab = State(initialValue: tab)
     }
 
+    /// a plan was created for this person or changed since they last opened it
     private var waiting: Bool {
-        (home?.asks ?? []).contains { $0.state == "proposing" && $0.me?.status == "pending" }
+        ((home?.asks ?? []) + (home?.mine ?? [])).contains { PlanSeen.isUnread($0, user: app.userId) }
     }
 
     var body: some View {
-        SubScreen(title: Copy.brand, trailing: [("calendar", "Events", { app.push(.events) })]) {
+        SubScreen(title: Copy.brand, trailing: [("calendar", "Calendar", { app.push(.calendar) })]) {
             VStack(spacing: 0) {
                 SegmentChips(tab: $tab, waiting: waiting)
                 ZStack(alignment: .top) {
@@ -375,11 +385,17 @@ struct MusingScreen: View {
     @ViewBuilder private var signalsTab: some View {
         let mine = home?.signals ?? []
         let friends = home?.friendSignals ?? []
-        SectionTitle("Your signals")
+        HStack(alignment: .firstTextBaseline) {
+            SectionTitle("Your signals")
+            // the newest few show by default, so friends' signals are never a long scroll away
+            if mine.count > 2 {
+                Button { withAnimation(.easeOut(duration: 0.15)) { allMine.toggle() } } label: {
+                    Text(allMine ? "Show fewer" : "Past signals").font(.system(size: 14, weight: .semibold)).foregroundStyle(FB.blue).fixedSize()
+                }
+            }
+        }
         if mine.isEmpty { EmptyNote(note("Nothing sent yet. A signal you send shows up here.")) }
-        // the newest few, so friends' signals are never a long scroll away
         ForEach(allMine ? mine : Array(mine.prefix(2))) { s in SignalCard(signal: s) {} }
-        if mine.count > 2, !allMine { QuietButton(label: "Show \(mine.count - 2) older", fill: true, outline: true) { allMine = true } }
         SectionTitle("Your friends' signals").padding(.top, 12)
         if friends.isEmpty { EmptyNote(note("Nothing from friends right now.")) }
         ForEach(friends) { s in SignalCard(signal: s, busy: joining == s.id) { join(s) } }
@@ -436,6 +452,7 @@ struct MusingScreen: View {
             guard user == app.userId, !Task.isCancelled else { return }
             home = h
             error = nil
+            PlanSeen.adopt(h.asks + h.mine, user: user)
         } catch let e {
             guard user == app.userId, !Task.isCancelled else { return }
             error = errorText(e)

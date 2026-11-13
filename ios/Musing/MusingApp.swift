@@ -41,6 +41,8 @@ struct RootView: View {
                     case .group(let id): GroupDetailScreen(groupId: id)
                     case .publicEvent(let id): PublicEventScreen(eventId: id)
                     case .developer: DeveloperScreen()
+                    case .calendar: CalendarScreen()
+                    case .availability: AvailabilityScreen()
                     }
                 }
         }
@@ -102,6 +104,8 @@ struct RootView: View {
         case "discover": if let arg { app.path = [.musing(compose: false, tab: .plans), .plan(arg), .discoverTogether(arg)] }
         case "settings": app.path = [.musingSettings]
         case "developer": app.path = [.developer]
+        case "calendar": app.path = [.calendar]
+        case "availability": app.path = [.calendar, .availability]
         case "groups": app.path = arg.map { [.groups, .group($0)] } ?? [.groups]
         case "public-event": if let arg { app.path = [.events, .publicEvent(arg)] }
         default: break
