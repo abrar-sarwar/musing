@@ -39,6 +39,7 @@ struct RootView: View {
                     case .groups: GroupsScreen()
                     case .group(let id): GroupDetailScreen(groupId: id)
                     case .publicEvent(let id): PublicEventScreen(eventId: id)
+                    case .developer: DeveloperScreen()
                     }
                 }
         }
@@ -75,6 +76,15 @@ struct RootView: View {
         // musing://musing?as=alex opens the musing. surface as alex
         let comps = URLComponents(url: url, resolvingAgainstBaseURL: false)
         if let who = comps?.queryItems?.first(where: { $0.name == "as" })?.value { app.actAs(who) }
+        // musing://developer?server=https://name.trycloudflare.com points this phone at a new server
+        if let server = comps?.queryItems?.first(where: { $0.name == "server" })?.value {
+            UserDefaults.standard.set(server.trimmingCharacters(in: .whitespacesAndNewlines), forKey: Config.hostOverrideKey)
+            Realtime.shared.restart()
+            Task {
+                await app.loadUsers()
+                app.version += 1
+            }
+        }
         // every screen has a link: musing://reels, musing://menu, musing://plan/<id>, ...
         let arg = url.pathComponents.dropFirst().first
         switch url.host ?? "" {
@@ -88,6 +98,7 @@ struct RootView: View {
         case "people": if let arg { app.path = [.person(arg)] }
         case "plan": if let arg { app.path = [.musing(compose: false), .plan(arg)] }
         case "settings": app.path = [.musingSettings]
+        case "developer": app.path = [.developer]
         case "groups": app.path = arg.map { [.groups, .group($0)] } ?? [.groups]
         case "public-event": if let arg { app.path = [.events, .publicEvent(arg)] }
         default: break

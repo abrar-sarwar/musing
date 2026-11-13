@@ -25,7 +25,24 @@ enum Config {
         #endif
     }
 
+    /// a full address typed in Developer (a tunnel such as https://name.trycloudflare.com) is
+    /// one door to both the api and the database. a bare ip or mac name is not: see resolve.
+    static var tunnelBase: String? {
+        guard var s = UserDefaults.standard.string(forKey: hostOverrideKey)?.trimmingCharacters(in: .whitespacesAndNewlines), !s.isEmpty else { return nil }
+        while s.hasSuffix("/") { s.removeLast() }
+        if s.hasPrefix("http://") || s.hasPrefix("https://") { return s }
+        let isName = s.contains(".") && s.contains(where: \.isLetter) && !s.hasSuffix(".local") && !s.contains(":")
+        return isName ? "https://" + s : nil
+    }
+
+    /// the address written into the app when it was built
+    static var builtInHost: String? {
+        let h = values["DEV_HOST"] ?? ""
+        return h.isEmpty ? nil : h
+    }
+
     private static func resolve(_ url: String) -> String {
+        if let base = tunnelBase { return base }
         guard let host = devHost else { return url }
         return url.replacingOccurrences(of: "//localhost", with: "//\(host)").replacingOccurrences(of: "//127.0.0.1", with: "//\(host)")
     }
@@ -169,6 +186,14 @@ final class Realtime {
 
     func start() {
         guard task == nil else { return }
+        connect()
+    }
+
+    /// the server address changed: drop the socket and dial the new one
+    func restart() {
+        let old = task
+        task = nil
+        old?.cancel(with: .goingAway, reason: nil)
         connect()
     }
 

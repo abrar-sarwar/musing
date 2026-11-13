@@ -85,6 +85,9 @@ struct ProfileView: View {
             if isSelf {
                 Button { toast("Cover photo editing is mocked in this prototype.") } label: { Image(systemName: "pencil").font(.system(size: 21, weight: .medium)) }.accessibilityLabel("Edit cover")
             }
+            if isSelf {
+                Button { app.push(.developer) } label: { Image(systemName: "wrench.and.screwdriver").font(.system(size: 20, weight: .medium)) }.accessibilityLabel("Developer")
+            }
             Button { app.push(.search) } label: { Image(systemName: "magnifyingglass").font(.system(size: 22, weight: .medium)) }.accessibilityLabel("Search")
             Button { toast("Profile settings are mocked in this prototype.") } label: { Image(systemName: "ellipsis.circle").font(.system(size: 22, weight: .medium)) }.accessibilityLabel("More")
         }
@@ -406,8 +409,6 @@ struct SearchScreen: View {
 struct MenuScreen: View {
     @EnvironmentObject var app: AppState
     @State private var busy = false
-    @State private var editingHost = false
-    @State private var host = UserDefaults.standard.string(forKey: Config.hostOverrideKey) ?? ""
 
     var body: some View {
         SubScreen(title: "Menu") {
@@ -445,7 +446,7 @@ struct MenuScreen: View {
                         Hairline()
                         row("arrow.clockwise", busy ? "Resetting…" : "Reset demo data") { reset() }
                         Hairline()
-                        row("network", "Server address") { editingHost = true }
+                        row("wrench.and.screwdriver", "Developer · server address") { app.push(.developer) }
                     }
                     .background(Color.white, in: RoundedRectangle(cornerRadius: 12))
 
@@ -467,16 +468,6 @@ struct MenuScreen: View {
                 .padding(12).padding(.bottom, 28)
             }
             .background(FB.bg2)
-        }
-        .alert("Server address", isPresented: $editingHost) {
-            TextField("laptop ip, e.g. 192.168.1.5", text: $host).textInputAutocapitalization(.never).autocorrectionDisabled()
-            Button("Save") {
-                UserDefaults.standard.set(host.trimmingCharacters(in: .whitespaces), forKey: Config.hostOverrideKey)
-                app.version += 1
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("The laptop running the api and supabase. Leave empty to use the address found when the app was built.")
         }
     }
 
@@ -529,5 +520,126 @@ struct MenuScreen: View {
             }
         }
         .tint(FB.green).padding(12)
+    }
+}
+
+// developer: where this phone finds the server. the server is the laptop. on the cable or the
+// same wifi the built-in address works. anywhere else, paste the tunnel address from ./tunnel.sh.
+struct DeveloperScreen: View {
+    @EnvironmentObject var app: AppState
+    @State private var address = UserDefaults.standard.string(forKey: Config.hostOverrideKey) ?? ""
+    @State private var testing = false
+    @State private var apiResult: String?
+    @State private var dbResult: String?
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        SubScreen(title: "Developer") {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Server address").font(.system(size: 17, weight: .bold)).foregroundStyle(FB.text).padding(.top, 6)
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Where the laptop running musing. is. Paste the tunnel address (https://….trycloudflare.com) to use the app without the cable, or type the laptop's IP on the same Wi‑Fi. Empty uses the address built into the app.")
+                            .font(.system(size: 13.5)).foregroundStyle(FB.muted).fixedSize(horizontal: false, vertical: true)
+                        HStack(spacing: 8) {
+                            TextField("https://name.trycloudflare.com or 192.168.1.5", text: $address)
+                                .textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL).focused($focused)
+                                .font(.system(size: 15)).padding(.horizontal, 12).padding(.vertical, 11)
+                                .background(FB.input, in: RoundedRectangle(cornerRadius: 8))
+                                .accessibilityIdentifier("server-address")
+                            Button { if let s = UIPasteboard.general.string { address = s.trimmingCharacters(in: .whitespacesAndNewlines) } } label: {
+                                Text("Paste").font(.system(size: 15, weight: .semibold)).foregroundStyle(FB.text).padding(.horizontal, 12).padding(.vertical, 11)
+                                    .background(FB.input, in: RoundedRectangle(cornerRadius: 8))
+                            }
+                            .buttonStyle(FadePress())
+                        }
+                        Button { save(address) } label: {
+                            Text(testing ? "Testing…" : "Save and test").font(.system(size: 16, weight: .semibold)).foregroundStyle(.white)
+                                .frame(maxWidth: .infinity).padding(.vertical, 12).background(FB.blue, in: RoundedRectangle(cornerRadius: 8))
+                        }
+                        .buttonStyle(FadePress()).disabled(testing)
+                        Button {
+                            address = ""
+                            save("")
+                        } label: {
+                            Text("Use the built-in address").font(.system(size: 15, weight: .semibold)).foregroundStyle(FB.text)
+                                .frame(maxWidth: .infinity).padding(.vertical, 11).background(FB.input, in: RoundedRectangle(cornerRadius: 8))
+                        }
+                        .buttonStyle(FadePress()).disabled(testing)
+                    }
+                    .padding(12).background(Color.white, in: RoundedRectangle(cornerRadius: 12))
+
+                    Text("Connection").font(.system(size: 17, weight: .bold)).foregroundStyle(FB.text).padding(.top, 6)
+                    VStack(alignment: .leading, spacing: 0) {
+                        check("API server", Config.apiURL, apiResult)
+                        Hairline()
+                        check("Database", Config.supabaseURL, dbResult)
+                    }
+                    .background(Color.white, in: RoundedRectangle(cornerRadius: 12))
+
+                    Text("Signed in as \(app.me?.name ?? app.userId) (@\(app.userId)). Built-in address: \(Config.builtInHost ?? "localhost").")
+                        .font(.system(size: 12.5)).foregroundStyle(FB.muted).padding(.top, 4)
+                }
+                .padding(12).padding(.bottom, 28)
+            }
+            .background(FB.bg2)
+            .scrollDismissesKeyboard(.interactively)
+        }
+        .task { await test() }
+    }
+
+    private func check(_ label: String, _ url: String, _ result: String?) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Group {
+                if testing || result == nil { ProgressView().scaleEffect(0.8) }
+                else { Image(systemName: result == "ok" ? "checkmark.circle.fill" : "xmark.circle.fill").foregroundStyle(result == "ok" ? FB.green : FB.red) }
+            }
+            .frame(width: 22, height: 22)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(label).font(.system(size: 16, weight: .semibold)).foregroundStyle(FB.text)
+                Text(url).font(.system(size: 12.5)).foregroundStyle(FB.muted).lineLimit(2)
+                if let result, result != "ok", !testing { Text(result).font(.system(size: 12.5)).foregroundStyle(FB.red).lineLimit(3) }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+    }
+
+    private func save(_ value: String) {
+        focused = false
+        UserDefaults.standard.set(value.trimmingCharacters(in: .whitespacesAndNewlines), forKey: Config.hostOverrideKey)
+        Realtime.shared.restart()
+        Task {
+            await test()
+            // every screen refetches from the new server
+            await app.loadUsers()
+            app.version += 1
+            if apiResult == "ok" && dbResult == "ok" { toast("Connected.") }
+        }
+    }
+
+    private func test() async {
+        testing = true
+        async let api = Self.reach(Config.apiURL + "/api/health", key: nil)
+        async let db = Self.reach(Config.supabaseURL + "/rest/v1/users?select=id&limit=1", key: Config.supabaseKey)
+        (apiResult, dbResult) = await (api, db)
+        testing = false
+    }
+
+    private static func reach(_ url: String, key: String?) async -> String {
+        guard let u = URL(string: url) else { return "that is not a valid address" }
+        var req = URLRequest(url: u)
+        req.timeoutInterval = 12
+        if let key {
+            req.setValue(key, forHTTPHeaderField: "apikey")
+            req.setValue("Bearer \(key)", forHTTPHeaderField: "authorization")
+        }
+        do {
+            let (_, resp) = try await URLSession.shared.data(for: req)
+            let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
+            return (200..<300).contains(status) ? "ok" : "answered with http \(status)"
+        } catch let e {
+            return errorText(e)
+        }
     }
 }

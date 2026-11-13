@@ -35,7 +35,9 @@ open ios/Musing.xcodeproj           # pick a simulator or your phone, press run
 
 the app is a plain xcode project written in swift. it has no package dependencies, so there is nothing to install. the project file is generated from `ios/project.yml`; after adding or removing a swift file run `cd ios && xcodegen generate` (`brew install xcodegen`).
 
-on a physical phone, localhost is the phone. the build writes this mac's bonjour name (`your-mac.local`) into the app, so the phone reaches the laptop over the usb cable or over home wifi. campus and guest wifi usually block phone-to-laptop traffic, so keep the cable plugged in there. if it picks the wrong address, set it in the app under Menu > Server address.
+on a physical phone, localhost is the phone. the build writes this mac's bonjour name (`your-mac.local`) into the app, so the phone reaches the laptop over the usb cable or over home wifi. campus and guest wifi usually block phone-to-laptop traffic, so keep the cable plugged in there. if it picks the wrong address, set it in the app under profile > wrench icon (Developer).
+
+**no cable, any network:** run `./tunnel.sh` on the laptop (needs `brew install cloudflared`). it prints a temporary https address that reaches this mac's api and database through one door. paste it into Developer in the app, or open the `musing://developer?server=...` link it prints on the phone. the address is public while the script runs and changes each time it restarts.
 
 ## running it on your own mac and phone (teammates)
 

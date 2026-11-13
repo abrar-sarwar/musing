@@ -8,6 +8,7 @@ enum Route: Hashable {
     case search, menu, messages, thread(String), events, event(String), listing(String), person(String)
     case musing(compose: Bool), plan(String), musingSettings, nudge, recap
     case groups, group(String), publicEvent(String)
+    case developer
 }
 
 // tiny toast for mocked facebook actions, so nothing on screen is a dead button.
