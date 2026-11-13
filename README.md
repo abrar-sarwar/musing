@@ -39,6 +39,17 @@ on a physical phone, localhost is the phone. the build writes this mac's bonjour
 
 **no cable, any network:** run `./tunnel.sh` on the laptop (needs `brew install cloudflared`). it prints a temporary https address that reaches this mac's api and database through one door. paste it into Developer in the app, or open the `musing://developer?server=...` link it prints on the phone. the address is public while the script runs and changes each time it restarts.
 
+## hosted (no laptop)
+
+verified current behavior: the api server runs on vercel at `https://musing-six.vercel.app` (project `musing`, root directory `web`, connected to this repo so a push to `main` deploys production) and the database is a supabase cloud project (`liwwbmkylzycoayfmvkn`, us-east-1) with migrations `0001` to `0005` applied and the demo data seeded. the ios app is still installed from xcode; only the server and database are hosted. the facebook surfaces are the same seeded, mock catalog as local.
+
+- **server env (vercel, production):** `MODEL_API_KEY`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `DEMO_SECRET`, `DEMO_PASSCODE`, `ADMIN_TOKEN`. the values are kept in `web/.env.hosted.local` (gitignored) on abrar's mac.
+- **phone:** put `API_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `DEMO_PASSCODE` and `ADMIN_TOKEN` in `ios/.env` and press run in xcode. `ADMIN_TOKEN` is what lets "Reset demo data" and the muse switches through. if a tunnel address was saved under profile > Developer, clear it: that override sends the api and the database to one address, and hosted they are two.
+- **what is open:** `/api/health` answers anyone. everything else needs the signed demo token, and reset, settings and the muse smoke route need the admin token. anyone holding the passcode can spend the muse key.
+- **schema changes:** `supabase db push` (the repo is linked to the cloud project). reseed with `cd web && node --env-file=.env.hosted.local --import tsx scripts/seed.ts`, or "Reset demo data" in the app.
+- **the web shell** at `/` does not sign in, so it errors on the hosted server. it is a local dev tool.
+- vercel deployment protection covers preview deployments only; the production address is public so phones can reach it.
+
 ## running it on your own mac and phone (teammates)
 
 the short way: clone, run `./setup.sh` from the repo root, then `cd web && pnpm dev` and press run in xcode. the script finds your own apple team, writes your signing and env files, starts the database and seeds it. it asks once for the muse key and never overwrites a file you already have. the steps below are what it does, for when something goes wrong.

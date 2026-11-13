@@ -52,6 +52,8 @@ enum Config {
     static var supabaseKey: String { values["SUPABASE_ANON_KEY"] ?? "" }
     /// only needed against a deployed server
     static var demoPasscode: String { values["DEMO_PASSCODE"] ?? "" }
+    /// only needed against a deployed server: lets Reset demo data and the demo switches through
+    static var adminToken: String { values["ADMIN_TOKEN"] ?? "" }
 }
 
 struct ApiError: LocalizedError {
@@ -77,6 +79,7 @@ enum API {
         req.setValue(user, forHTTPHeaderField: "x-musing-user")
         // a deployed server does not believe the header above. it wants the signed demo token.
         if let token = tokens[user] { req.setValue(token, forHTTPHeaderField: "x-musing-token") }
+        if !Config.adminToken.isEmpty { req.setValue(Config.adminToken, forHTTPHeaderField: "x-admin-token") }
         if let body {
             req.setValue("application/json", forHTTPHeaderField: "content-type")
             req.httpBody = try? JSONSerialization.data(withJSONObject: body)

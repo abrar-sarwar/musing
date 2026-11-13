@@ -357,7 +357,9 @@ export async function makeItReal(planId: string): Promise<void> {
   await db.from("thread_pings").upsert({ thread_id: thread.id, at: new Date().toISOString() });
 
   if (settings.posters_on && made.poster_prompt) {
-    void makePoster(planId, event.id as string, made.poster_prompt, settings.muse_replay).catch((e) => console.error("poster failed:", e));
+    // awaited: a serverless host freezes the function once this returns, and the poster would never land.
+    // callers run this inside after(), so no response waits on it.
+    await makePoster(planId, event.id as string, made.poster_prompt, settings.muse_replay).catch((e) => console.error("poster failed:", e));
   }
 }
 
