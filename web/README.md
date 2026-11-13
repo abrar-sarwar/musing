@@ -26,4 +26,9 @@ pnpm typecheck
 pnpm lint
 pnpm test:leak
 pnpm test:router
+pnpm test:discover
+pnpm test:signals
+pnpm test:whatif
 ```
+
+`test:discover` exercises grounded seeded-catalog ranking, `test:signals` covers audience/quorum/expiry rules, and `test:whatif` covers the deterministic plan-specific suggestions. none of these three calls muse.
