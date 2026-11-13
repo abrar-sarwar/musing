@@ -5,7 +5,7 @@ import type { Matched } from "@/lib/muse/match";
 import { understand, UnderstandSchema } from "@/lib/muse/understand";
 import { createDraftFromMatch, sendPlan, cancelPlan } from "@/lib/plans";
 import { getSettings } from "@/lib/settings";
-import { isExpired, parseAudience } from "@/lib/signals";
+import { canSeeSignal, isExpired, parseAudience } from "@/lib/signals";
 import { firstName } from "@/lib/time";
 import type { FreeWindow, User } from "@/lib/types";
 import { todayLine } from "@/lib/when";
@@ -60,9 +60,17 @@ export async function convergeOnSignal(museId: string): Promise<ConvergeOutcome>
   const owner = ownerRow as User | null;
   if (!owner) return { status: "skipped", summary: "owner not found" };
 
-  const { data: edges } = await db.from("friendships").select("friend_id").eq("user_id", owner.id);
-  const friendIds = (edges ?? []).map((e) => e.friend_id as string);
+  const { data: edges } = await db.from("friendships").select("user_id,friend_id,close").or(`user_id.eq.${owner.id},friend_id.eq.${owner.id}`);
+  const outClose = new Map<string, boolean>();
+  const inClose = new Map<string, boolean>();
+  for (const e of (edges ?? []) as Array<{ user_id: string; friend_id: string; close: boolean }>) {
+    if (e.user_id === owner.id) outClose.set(e.friend_id, Boolean(e.close));
+    else if (e.friend_id === owner.id) inClose.set(e.user_id, Boolean(e.close));
+  }
+  let friendIds = [...outClose.keys()];
   if (friendIds.length === 0) return { status: "no_candidates", summary: "no friends" };
+  // a signal shown to close friends alone is picked from those people alone
+  if (parseAudience(trigger.audience) === "close") friendIds = friendIds.filter((id) => outClose.get(id));
 
   // signals already spent as the origin of an active plan are not open any more
   const { data: activePlans } = await db.from("plans").select("muse_id").in("state", ["draft", "proposing", "happening"]);
@@ -73,11 +81,17 @@ export async function convergeOnSignal(museId: string): Promise<ConvergeOutcome>
     .from("muses")
     .select("*")
     .in("user_id", friendIds)
-    .in("audience", ["friends", "mutual"])
+    .neq("audience", "muse")
     .is("consumed_plan_id", null)
     .order("created_at", { ascending: false })
     .limit(24);
-  const open = ((rows ?? []) as MuseRow[]).filter((r) => !spentMuses.has(r.id) && !isExpired(r.expires_at, now));
+  const open = ((rows ?? []) as MuseRow[]).filter((r) => {
+    if (spentMuses.has(r.id) || isExpired(r.expires_at, now)) return false;
+    // the author decides who a signal is shown to; convergence may only use
+    // one this owner actually sees. a close-friends signal counts only when
+    // the author counts the owner as close (the flag is one-directional).
+    return canSeeSignal(parseAudience(r.audience), inClose.get(r.user_id) ? "close" : "friend");
+  });
   if (open.length === 0) return { status: "no_candidates", summary: "no open friend signals" };
 
   const { data: friendRows } = await db.from("users").select("*").in("id", friendIds);
@@ -140,14 +154,25 @@ export async function convergeOnSignal(museId: string): Promise<ConvergeOutcome>
   // convergence plan, a second pass over a slightly different subset must
   // not invite the same people twice.
   const myMuses = new Set([trigger.id, ...o.participants.map((p) => p.muse_id)]);
-  const { data: prior } = await db.from("signal_matches").select("dedupe_key,plan_id");
-  for (const row of (prior ?? []) as Array<{ dedupe_key: string; plan_id: string | null }>) {
+  const { data: prior } = await db.from("signal_matches").select("dedupe_key,plan_id,participant_ids");
+  for (const row of (prior ?? []) as Array<{ dedupe_key: string; plan_id: string | null; participant_ids: string[] }>) {
     if (!row.plan_id) continue;
-    const ids = String(row.dedupe_key).replace(/^signals:/, "").split(",");
-    if (!ids.some((id) => myMuses.has(id))) continue;
     const { data: pl } = await db.from("plans").select("state").eq("id", row.plan_id).maybeSingle();
-    if (pl && ["draft", "proposing", "happening"].includes(pl.state as string)) {
-      return { status: "duplicate", planId: row.plan_id, summary: "some of these signals already converged into an open plan" };
+    if (!pl) continue;
+    if (["draft", "proposing", "happening"].includes(pl.state as string)) {
+      const ids = String(row.dedupe_key).replace(/^signals:/, "").split(",");
+      if (ids.some((id) => myMuses.has(id))) {
+        return { status: "duplicate", planId: row.plan_id, summary: "some of these signals already converged into an open plan" };
+      }
+    }
+    // a group that already passed on a plan together is not proposed the
+    // same group again from their leftover signals. a different group (one
+    // person more or fewer) is a different offer and stays possible.
+    if (pl.state === "faded") {
+      const theirs = [...(row.participant_ids ?? [])].sort();
+      if (theirs.length === participantIds.length && theirs.every((id, i) => id === participantIds[i])) {
+        return { status: "duplicate", planId: row.plan_id, summary: "this group already passed on a plan together" };
+      }
     }
   }
 
