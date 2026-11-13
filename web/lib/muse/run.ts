@@ -30,6 +30,8 @@ export type StructuredOpts<S extends z.ZodType> = {
   check?: (out: z.infer<S>) => string | null;
   /** cache slot. defaults to job. */
   cacheKey?: string;
+  /** hard limit for one attempt, streamed or not. a stalled stream is cut off here. default 60s. */
+  timeoutMs?: number;
   /** never store or replay this answer. for replies that only make sense in their own moment (chat). */
   noCache?: boolean;
   /** serve the cache without calling muse when present (smoke tests, muse off). */
@@ -151,8 +153,12 @@ async function complete<S extends z.ZodType>(opts: StructuredOpts<S>, jsonSchema
     reasoning_effort: opts.reasoning ?? DEFAULT_REASONING,
   };
 
+  // one deadline for the whole attempt. the sdk's own timeout only covers getting a response
+  // started, so a stream that stalled half-way used to hang until the socket gave up.
+  const signal = AbortSignal.timeout(opts.timeoutMs ?? 60_000);
+
   if (!opts.stream) {
-    const res = await muse().chat.completions.create(base);
+    const res = await muse().chat.completions.create(base, { signal });
     const choice = res.choices[0];
     return {
       text: choice?.message?.content ?? "",
@@ -163,7 +169,7 @@ async function complete<S extends z.ZodType>(opts: StructuredOpts<S>, jsonSchema
     };
   }
 
-  const stream = await muse().chat.completions.create({ ...base, stream: true, stream_options: { include_usage: true } });
+  const stream = await muse().chat.completions.create({ ...base, stream: true, stream_options: { include_usage: true } }, { signal });
   const partial = new PartialStringField(opts.stream.field);
   let text = "";
   let finishReason: string | null = null;
@@ -260,7 +266,7 @@ function neverConnected(e: unknown, elapsedMs: number): boolean {
 
 type Usage = { attempt?: number; promptTokens?: number; completionTokens?: number; reasoningTokens?: number };
 
-async function trace(t: { job: JobName; model: string; latencyMs: number; ok: boolean; summary: string; planId: string | null; usage?: Usage }) {
+export async function trace(t: { job: JobName; model: string; latencyMs: number; ok: boolean; summary: string; planId: string | null; usage?: Usage }) {
   const { error } = await serverDb().from("muse_trace").insert({
     prompt_tokens: t.usage?.promptTokens ?? null,
     completion_tokens: t.usage?.completionTokens ?? null,

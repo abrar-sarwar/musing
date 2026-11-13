@@ -1,6 +1,8 @@
 import { serverDb } from "@/lib/db/server";
 import { catalog, planOpportunities, topicsFor, type Listing, type PublicEvent } from "@/lib/discover";
+import { answerRoute, routeAsk } from "@/lib/chatRouter";
 import { chat } from "@/lib/muse/chat";
+import { trace } from "@/lib/muse/run";
 import { loadBundle, PlanError } from "@/lib/plans";
 import { firstName } from "@/lib/time";
 import type { FreeWindow, Person, User } from "@/lib/types";
@@ -122,7 +124,12 @@ async function insertMuse(threadId: string, fields: Partial<MessageRow>): Promis
   return data as MessageRow;
 }
 
-export type MuseAsk = { messageId?: string | null; action?: "recap" | "finds" | "food" | null };
+export type MuseAsk = {
+  messageId?: string | null;
+  action?: "recap" | "finds" | "food" | null;
+  /** dev servers only: stand in for a model that is slower than the limit. no model call is made. */
+  test?: { delayMs: number; timeoutMs: number } | null;
+};
 
 /**
  * muse answers in a plan chat. called when someone mentions @muse or taps a muse action.
@@ -138,14 +145,25 @@ export async function museReply(threadId: string, userId: string, ask: MuseAsk, 
   const uses = await planOpportunities(b.plan.id);
 
   // the two instant actions read the plan straight from the database. no model call.
-  if (ask.action === "recap" || ask.action === "finds") {
-    const people = going(b).map((u) => lower(firstName(u.name)));
-    const body = ask.action === "recap" ? `${b.plan.activity}, ${b.plan.when_text}. ${b.plan.where_text}. ${people.join(", ")} are in.` : uses.length > 0 ? "here's what we found for this one." : "nothing saved for this plan yet.";
-    const card = ask.action === "recap" ? planCard(b.plan, uses) : uses.length > 0 ? { type: "finds", items: uses.map((u) => ({ kind: u.kind, id: u.id, title: u.title, sub: u.sub })) } : null;
-    const row = await insertMuse(threadId, { body, card });
+  const names = going(b).map((u) => lower(firstName(u.name)));
+  const plain = uses.map((u) => ({ kind: u.kind, id: u.id, title: u.title, sub: u.sub }));
+  const routed = async (route: Parameters<typeof answerRoute>[0], replyTo: string | null, t0: number) => {
+    const a = answerRoute(route, b.plan, names, plain);
+    const card = a.planCard ? planCard(b.plan, uses) : a.items ? { type: "finds", items: a.items } : null;
+    let row: MessageRow;
+    try {
+      row = await insertMuse(threadId, { body: a.body, card, reply_to: replyTo });
+    } catch (e) {
+      if ((e as { code?: string }).code === "23505") throw new PlanError("muse already answered that", 409);
+      throw e;
+    }
     await ping(threadId);
+    await trace({ job: "chat", model: "router", latencyMs: Date.now() - t0, ok: true, summary: `routed "${route}" · answered from the plan, no model call`, planId: b.plan.id });
     return view(row);
-  }
+  };
+
+  // the two instant actions read the plan straight from the database. no model call.
+  if (ask.action === "recap" || ask.action === "finds") return routed(ask.action, null, Date.now());
 
   // the text muse is answering: the member's own message, or the food action
   let askText = "find food nearby for after";
@@ -155,6 +173,9 @@ export async function museReply(threadId: string, userId: string, ask: MuseAsk, 
     trigger = data as MessageRow | null;
     if (!trigger || trigger.sender_id !== userId || !trigger.body) throw new PlanError("nothing to answer", 404);
     askText = trigger.body.replace(/@muse\b[,:]?/gi, "").trim() || "what's the plan?";
+    // intent router: what the plan already knows is answered without the model
+    const route = ask.test ? null : routeAsk(askText);
+    if (route) return routed(route, trigger.id, Date.now());
   }
 
   // clear out a reply that died mid-way, then check nobody else has muse busy
@@ -195,7 +216,8 @@ export async function museReply(threadId: string, userId: string, ask: MuseAsk, 
     const nameOf = (id: string | null) => (id ? lower(firstName(b.users.get(id)?.name ?? "someone")) : "muse");
 
     // a slow model never holds the chat. past this, muse bows out and the placeholder is removed.
-    const giveUp = new Promise<never>((_, reject) => setTimeout(() => reject(new PlanError("muse took too long. the chat still works, ask again in a bit.", 504)), 45_000));
+    const giveUp = new Promise<never>((_, reject) => setTimeout(() => reject(new PlanError("muse took too long. the chat still works, ask again in a bit.", 504)), ask.test?.timeoutMs ?? 62_000));
+    if (ask.test) await Promise.race([giveUp, new Promise((resolve) => setTimeout(resolve, ask.test!.delayMs))]);
     const r = await Promise.race([giveUp, chat(
       {
         planId: b.plan.id,

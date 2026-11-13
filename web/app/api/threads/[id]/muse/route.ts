@@ -18,8 +18,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (!action && !messageId) return Response.json({ ok: false, error: "expected { messageId } or { action }" }, { status: 400 });
     // the two instant actions read the database only. everything else needs muse on.
     if (action !== "recap" && action !== "finds" && !(await getSettings()).muse_on) return Response.json({ ok: false, error: "muse is off" }, { status: 409 });
+    // dev servers only: "x-musing-test: slow-muse" stands in for a model slower than the limit
+    const test = process.env.NODE_ENV !== "production" && req.headers.get("x-musing-test") === "slow-muse" ? { delayMs: 6000, timeoutMs: 2000 } : null;
     return sseResponse(async (send) => {
-      const message = await museReply(id, user.id, { messageId, action }, (delta) => send("delta", { text: delta }), () => send("restart", {}));
+      const message = await museReply(id, user.id, { messageId, action, test }, (delta) => send("delta", { text: delta }), () => send("restart", {}));
       send("done", { message });
     });
   } catch (e) {

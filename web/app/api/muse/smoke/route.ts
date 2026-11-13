@@ -1,3 +1,4 @@
+import { requireAdmin } from "@/lib/http";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { generateImage, runStructured } from "@/lib/muse/run";
@@ -17,6 +18,8 @@ export async function GET(req: Request) {
   const raw = url.searchParams.get("raw") === "1";
 
   try {
+    // this makes paid calls. on a deployed server it needs the admin token.
+    requireAdmin(req);
     if (part === "image") {
       const img = await generateImage({
         job: "smoke",

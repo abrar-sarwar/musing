@@ -114,6 +114,8 @@ export function chat(input: ChatInput, onText?: (delta: string) => void, onResta
     system: SYSTEM,
     user: publicBefore,
     maxTokens: 1600,
+    // one attempt gets 30 seconds. replies that work have taken 12 to 27
+    timeoutMs: 30_000,
     planId: input.planId,
     // a chat answer is about this exact moment. an old one must never stand in for it.
     noCache: true,

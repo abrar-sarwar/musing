@@ -329,15 +329,24 @@ export async function makeItReal(planId: string): Promise<void> {
   // the public event, group and listings this plan uses ride along on the card. the
   // private event made below is this group's plan to go, not a second public event.
   const found = (await planOpportunities(planId)).map((o) => ({ kind: o.kind, id: o.id, title: o.title, sub: o.sub }));
-  const { data: thread, error: e1 } = await db.from("threads").insert({ title: lower(made.thread_title), member_ids: going, plan_id: planId }).select("id").single();
+  // each step picks up whatever an earlier, failed attempt already made, so a retry
+  // finishes the job instead of making a second chat, event or card.
+  const { data: oldThread } = await db.from("threads").select("id").eq("plan_id", planId).limit(1).maybeSingle();
+  const { data: thread, error: e1 } = oldThread
+    ? { data: oldThread, error: null }
+    : await db.from("threads").insert({ title: lower(made.thread_title), member_ids: going, plan_id: planId }).select("id").single();
   if (e1 || !thread) throw new Error(`thread insert: ${e1?.message}`);
-  const { data: event, error: e2 } = await db
-    .from("events")
-    .insert({ plan_id: planId, host_id: plan.starter_id, title: made.event_title, description: made.event_description, starts_at: startsAt?.toISOString() ?? null, location: plan.where_text })
-    .select("id")
-    .single();
+  const { data: oldEvent } = await db.from("events").select("id").eq("plan_id", planId).limit(1).maybeSingle();
+  const { data: event, error: e2 } = oldEvent
+    ? { data: oldEvent, error: null }
+    : await db
+        .from("events")
+        .insert({ plan_id: planId, host_id: plan.starter_id, title: made.event_title, description: made.event_description, starts_at: startsAt?.toISOString() ?? null, location: plan.where_text })
+        .select("id")
+        .single();
   if (e2 || !event) throw new Error(`event insert: ${e2?.message}`);
-  await db.from("messages").insert({
+  const { data: oldCard } = await db.from("messages").select("id").eq("thread_id", thread.id).not("card", "is", null).limit(1).maybeSingle();
+  if (!oldCard) await db.from("messages").insert({
     thread_id: thread.id,
     sender_id: null,
     kind: "muse",

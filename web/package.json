@@ -11,6 +11,7 @@
     "db:reset": "cd .. && supabase db reset && cd web && pnpm seed",
     "typecheck": "tsc --noEmit",
     "test:leak": "node --import tsx scripts/leak.test.ts",
+    "test:router": "node --import tsx scripts/router.test.ts",
     "eval:muse": "node --env-file=.env.local --import tsx scripts/muse-eval.ts"
   },
   "dependencies": {
