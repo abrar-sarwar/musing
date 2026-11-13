@@ -76,7 +76,7 @@ struct SignalComposer: View {
                 .overlay(RoundedRectangle(cornerRadius: UI.cardRadius).stroke(focused ? FB.blue.opacity(0.5) : FB.button, lineWidth: 1))
                 .accessibilityIdentifier("signal-text")
 
-            OptionRow(label: "Create", options: [("signal", "Create signal"), ("event", "Create event")], selection: $mode, disabled: busy)
+            HalfToggle(options: [("signal", "Create signal"), ("event", "Create event")], selection: $mode, disabled: busy)
             if mode == "signal" {
                 OptionRow(label: "Send to", options: [("close", "Close friends"), ("friends", "Friends only"), ("mutual", "Friends of friends")], selection: $audience, disabled: busy)
                 OptionRow(label: "Wait for at least", options: (1...5).map { ($0, peopleCount($0)) }, selection: $waitFor, disabled: busy)
@@ -547,7 +547,7 @@ struct PlanScreen: View {
         if !checkedSeen {
             checkedSeen = true
             before = PlanSeen.mark(of: p, user: user)
-            wasUnread = PlanSeen.isUnread(p, user: user)
+            wasUnread = PlanSeen.isUpdated(p, user: user)
         }
         // opening it is reading it
         PlanSeen.see(p, user: user)

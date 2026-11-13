@@ -70,7 +70,7 @@ struct StatusStrip: View {
 
 struct SegmentChips: View {
     @Binding var tab: MusingTab
-    /// plans waiting on this person's answer: a dot on "View plans"
+    /// a plan someone else's "what if" changed and this person has not opened: a dot on "View plans"
     var waiting = false
     private let items: [(MusingTab, String)] = [(.send, "Send a signal"), (.signals, "View signals"), (.plans, "View plans")]
 
@@ -83,7 +83,7 @@ struct SegmentChips: View {
                         .frame(maxWidth: .infinity).frame(height: 36)
                         .background(on ? FB.blueSoft : FB.button, in: Capsule())
                         .overlay(alignment: .topTrailing) {
-                            // a red dot while a plan is new or changed and has not been opened
+                            // a red dot while a plan someone else changed has not been opened
                             if item.0 == .plans, waiting { Circle().fill(FB.badge).frame(width: 10, height: 10).overlay(Circle().stroke(Color.white, lineWidth: 1.5)).offset(x: -6, y: 2) }
                         }
                 }
@@ -120,6 +120,37 @@ struct OptionRow<Value: Hashable>: View {
         }
         .disabled(disabled)
         .accessibilityLabel("\(label): \(options.first { $0.value == selection }?.label ?? "")")
+    }
+}
+
+/// a choice between two things, as one bar the width of the screen: each half is a side, and
+/// the chosen side is the highlighted one. tap the other half to switch.
+struct HalfToggle<Value: Hashable>: View {
+    let options: [(value: Value, label: String)]
+    @Binding var selection: Value
+    var disabled = false
+    @Namespace private var slide
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(options, id: \.value) { o in
+                let on = o.value == selection
+                Button { withAnimation(.easeOut(duration: 0.18)) { selection = o.value } } label: {
+                    Text(o.label).font(.system(size: 15, weight: .semibold)).foregroundStyle(on ? Color.white : FB.blue).lineLimit(1)
+                        .frame(maxWidth: .infinity).frame(height: UI.buttonBig - 8)
+                        .background { if on { RoundedRectangle(cornerRadius: UI.buttonRadius - 3).fill(FB.blue).matchedGeometryEffect(id: "on", in: slide) } }
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(on ? .isSelected : [])
+            }
+        }
+        .padding(4)
+        .frame(height: UI.buttonBig)
+        .background(FB.blueSoft, in: RoundedRectangle(cornerRadius: UI.buttonRadius))
+        .overlay(RoundedRectangle(cornerRadius: UI.buttonRadius).stroke(FB.blue.opacity(0.35), lineWidth: 1))
+        .opacity(disabled ? 0.6 : 1)
+        .disabled(disabled)
     }
 }
 
@@ -212,11 +243,10 @@ struct PlanSummaryCard: View {
     var body: some View {
         // each status has its own look: red outline for news, dashed for a draft, soft blue once it's on
         let look = lookOverride ?? PlanLook.of(plan, user: app.userId)
-        let updated = look == .updated && PlanSeen.isUpdated(plan, user: app.userId)
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 5) {
                 if let icon = look.icon { Image(systemName: icon).font(.system(size: 11, weight: .bold)).foregroundStyle(look.ink) }
-                Text(updated || (lookOverride == .updated && plan.version > 1) ? "UPDATED PLAN · \(plan.downCount)/\(plan.quorum) DOWN" : planKicker(plan))
+                Text(look == .updated ? "UPDATED PLAN · \(plan.downCount)/\(plan.quorum) DOWN" : planKicker(plan))
                     .font(UI.kicker).tracking(0.3).foregroundStyle(look.ink)
                 Spacer(minLength: 0)
             }
@@ -374,9 +404,9 @@ struct MusingScreen: View {
         _tab = State(initialValue: tab)
     }
 
-    /// a plan was created for this person or changed since they last opened it
+    /// someone else's "what if" changed a plan since this person last opened it
     private var waiting: Bool {
-        ((home?.asks ?? []) + (home?.mine ?? [])).contains { PlanSeen.isUnread($0, user: app.userId) }
+        ((home?.asks ?? []) + (home?.mine ?? [])).contains { PlanSeen.isUpdated($0, user: app.userId) }
     }
 
     var body: some View {
@@ -471,12 +501,28 @@ struct MusingScreen: View {
         Button { app.push(.plan(p.id)) } label: { PlanSummaryCard(plan: p, eventAction: true) }.buttonStyle(FadePress())
     }
 
-    /// asks waiting on me first, then everything else newest first (the server's order)
+    /// updated plans first, then drafts, then everything else. each group soonest first; a plan
+    /// with no day yet goes after the ones that have one, and plans that faded go last.
     private var plans: [PlanView] {
         var seen = Set<String>()
         let all = ((home?.asks ?? []) + (home?.mine ?? [])).filter { seen.insert($0.id).inserted }
-        let waitingOnMe = { (p: PlanView) in p.role == "member" && p.state == "proposing" && p.me?.status == "pending" }
-        return all.filter(waitingOnMe) + all.filter { !waitingOnMe($0) && $0.state != "faded" } + all.filter { $0.state == "faded" }
+        let user = app.userId
+        let now = Date()
+        func group(_ p: PlanView) -> Int {
+            switch PlanLook.of(p, user: user) {
+            case .updated: 0
+            case .draft: 1
+            case .past: p.state == "faded" ? 3 : 2
+            default: 2
+            }
+        }
+        return all.enumerated().sorted { a, b in
+            let (ga, gb) = (group(a.element), group(b.element))
+            if ga != gb { return ga < gb }
+            let (da, db) = (planDate(a.element, from: now) ?? .distantFuture, planDate(b.element, from: now) ?? .distantFuture)
+            if da != db { return da < db }
+            return a.offset < b.offset
+        }.map(\.element)
     }
 
     private func note(_ empty: String) -> String {

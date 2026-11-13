@@ -65,6 +65,8 @@ struct PlanView: Decodable, Identifiable {
     let id: String
     let state: String // draft | proposing | happening | faded
     let version: Int
+    /// the last change to this plan was this person's own "what if". optional so an older server still decodes.
+    let revisedByMe: Bool?
     let solving: Bool
     let museOn: Bool
     let role: String // starter | member
