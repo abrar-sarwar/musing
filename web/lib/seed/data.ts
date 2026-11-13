@@ -371,6 +371,8 @@ export const PUBLIC_EVENTS = [
   { id: "pickleball-open-play", title: "Pickleball Open Play", description: "Four courts, paddles to borrow, all levels. Someone will teach you the scoring in five minutes.", when_day: "sat", when_time: "09:00", when_text: "saturday at 9", area: "the rec center", tags: ["sports"], organizer: "Atlanta Pickleball Club", capacity: 24, group_id: "atlanta-pickleball-club", cover: "reel/pickleball.jpg" },
   { id: "indie-gig-night", title: "Indie Gig Night", description: "Three local bands, one small room. Cheap at the door, done by eleven.", when_day: "fri", when_time: "20:00", when_text: "friday at 8", area: "Little Five Points", tags: ["music"], organizer: "Spin Cycle Collective", capacity: null, group_id: null, cover: "reel/concerts.jpg" },
   { id: "community-cooking-class", title: "Community Cooking Class", description: "Handmade noodles this week. You cook, you eat, you take leftovers home.", when_day: "sun", when_time: "10:00", when_text: "sunday at 10", area: "the community kitchen", tags: ["food"], organizer: "Rail Yard Markets", capacity: 16, group_id: null, cover: "reel/cooking.jpg" },
+  // keep in step with supabase/migrations/0010_plan_events_and_picks.sql
+  { id: "twilight-golf", title: "Twilight Nine Holes", description: "Nine holes at the public course after work. Clubs to borrow at the shop, no handicap needed, and nobody keeps score past the third hole.", when_day: "thu", when_time: "17:30", when_text: "thursday at 5:30", area: "Candler Park", tags: ["golf", "sports", "social"], organizer: "Candler Park Golf Course", capacity: 16, group_id: null, cover: null },
 ];
 
 // same ids as the app's marketplace photos (ios/Musing/MockData.swift)

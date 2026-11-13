@@ -8,7 +8,7 @@ private let topicSymbols: [String: String] = [
     "thrifting": "hanger", "fashion": "tshirt.fill", "home": "lamp.desk.fill", "photography": "camera.fill", "film": "film.fill",
     "games": "dice.fill", "gaming": "gamecontroller.fill", "music": "guitars.fill", "running": "figure.run", "fitness": "figure.yoga",
     "sports": "sportscourt.fill", "basketball": "basketball.fill", "soccer": "soccerball", "volleyball": "volleyball.fill", "tennis": "tennis.racket",
-    "pickleball": "figure.pickleball", "climbing": "figure.climbing", "skate": "figure.skating", "cycling": "bicycle", "outdoors": "tent.fill",
+    "pickleball": "figure.pickleball", "golf": "figure.golf", "climbing": "figure.climbing", "skate": "figure.skating", "cycling": "bicycle", "outdoors": "tent.fill",
     "food": "fork.knife", "cooking": "frying.pan.fill", "coffee": "cup.and.saucer.fill", "art": "paintpalette.fill", "crafts": "scissors",
     "creators": "video.fill", "tech": "cpu.fill", "security": "lock.shield.fill", "study": "graduationcap.fill", "career": "briefcase.fill",
     "volunteering": "heart.fill", "books": "books.vertical.fill", "anime": "sparkles.tv.fill", "dance": "figure.dance", "pets": "pawprint.fill",

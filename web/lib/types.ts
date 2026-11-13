@@ -30,6 +30,7 @@ export type Muse = {
   audience: "close" | "friends" | "mutual" | "muse"; // who the signal is shown to. muse = nobody but muse
   wait_for: number; // how many friends have to be in
   expires_at: string | null;
+  auto_event: boolean; // make the mock event the moment its plan is on
   created_at: string;
 };
 
@@ -69,6 +70,7 @@ export type Plan = {
   quorum: number;
   muse_on: boolean;
   expires_at: string | null; // a plan that is not real by then fades
+  auto_event: boolean; // false: the starter taps "make the event" once it is on
   created_at: string;
   updated_at: string;
 };
@@ -163,6 +165,7 @@ export type PlanView = {
   invited: number;
   downCount: number;
   picks: Array<{ user: Person; reason: string | null }> | null; // starter only
+  skipped: Array<{ user: Person; reason: string | null }> | null; // muse's picks the starter left off. starter, draft only
   going: Person[] | null; // only once it's happening
   me: {
     personalAsk: string | null;
@@ -172,6 +175,7 @@ export type PlanView = {
   } | null; // members only
   threadId: string | null;
   eventId: string | null;
+  autoEvent: boolean; // whether the event is made at quorum or waits for the starter
   // what muse found for this plan: at most one public event, one group, two listings.
   // catalog records only. never anyone's membership, saves or history.
   opportunities: Array<{ kind: "event" | "group" | "listing"; id: string; title: string; sub: string; reason: string | null; cover: string | null }>;

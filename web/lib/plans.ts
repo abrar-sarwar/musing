@@ -117,12 +117,14 @@ async function buildView(b: Bundle, viewerId: string): Promise<PlanView | null> 
           .filter((p): p is { user: User; reason: string | null } => Boolean(p.user))
           .map((p) => ({ user: person(p.user), reason: p.reason }))
       : null,
+    skipped: isStarter && plan.state === "draft" ? await skippedPicks(plan.id, users) : null,
     // names appear only once it's real, and only the people who are in.
     going: happening ? [starter, ...down.map((m) => users.get(m.user_id)).filter((u): u is User => Boolean(u))].map(person) : null,
     me: mine ? { personalAsk: mine.personal_ask, status: mine.status, counteroffer: mine.counteroffer, privateLimit } : null,
     // the chat is for people who are in. the event page is fine for anyone who was asked.
     threadId: happening && (isStarter || mine?.status === "down") ? plan.thread_id : null,
     eventId: happening ? plan.event_id : null,
+    autoEvent: plan.auto_event ?? true,
     opportunities: await planOpportunities(plan.id),
     updatedAt: plan.updated_at,
   };
@@ -367,6 +369,8 @@ export type SignalOpts = { waitFor: number; expiresAt: string | null };
 
 export async function createDraftFromMatch(museId: string, starterId: string, m: Matched, opts: SignalOpts = { waitFor: QUORUM, expiresAt: null }): Promise<string> {
   const db = serverDb();
+  // the event choice made in the composer travels with the signal to its plan
+  const { data: muse } = await db.from("muses").select("auto_event").eq("id", museId).maybeSingle();
   const { data: plan, error } = await db
     .from("plans")
     .insert({
@@ -382,6 +386,7 @@ export async function createDraftFromMatch(museId: string, starterId: string, m:
       quorum: quorumFor(opts.waitFor, m.picks.length),
       expires_at: opts.expiresAt,
       muse_on: true,
+      auto_event: (muse?.auto_event as boolean | undefined) ?? true,
       // a plan built around a public event keeps that event's day, time and place
       public_event_id: m.event_id,
     })
@@ -583,32 +588,90 @@ export async function makeItReal(planId: string): Promise<void> {
     ? { data: oldThread, error: null }
     : await db.from("threads").insert({ title: lower(made.thread_title), member_ids: going, plan_id: planId }).select("id").single();
   if (e1 || !thread) throw new Error(`thread insert: ${e1?.message}`);
-  const { data: oldEvent } = await db.from("events").select("id").eq("plan_id", planId).limit(1).maybeSingle();
-  const { data: event, error: e2 } = oldEvent
-    ? { data: oldEvent, error: null }
-    : await db
-        .from("events")
-        .insert({ plan_id: planId, host_id: plan.starter_id, title: made.event_title, description: made.event_description, starts_at: startsAt?.toISOString() ?? null, location: plan.where_text })
-        .select("id")
-        .single();
-  if (e2 || !event) throw new Error(`event insert: ${e2?.message}`);
+  // the starter chose to make the event themselves: what muse wrote for it waits for their tap
+  const draft: EventDraft = { event_title: made.event_title, event_description: made.event_description, poster_prompt: made.poster_prompt };
+  const eventId = (plan.auto_event ?? true) ? await insertEvent(plan, draft, startsAt) : null;
+  if (!eventId) await cachePut(`event_draft_${planId}`, draft);
   const { data: oldCard } = await db.from("messages").select("id").eq("thread_id", thread.id).not("card", "is", null).limit(1).maybeSingle();
   if (!oldCard) await db.from("messages").insert({
     thread_id: thread.id,
     sender_id: null,
     kind: "muse",
     body: lower(made.announce),
-    card: { type: "plan", plan_id: planId, event_id: event.id, title: plan.activity, when: plan.when_text, where: plan.where_text, line: lower(made.announce), found },
+    card: { type: "plan", plan_id: planId, event_id: eventId, title: plan.activity, when: plan.when_text, where: plan.where_text, line: lower(made.announce), found },
   });
-  await db.from("plans").update({ thread_id: thread.id, event_id: event.id, making_at: null, updated_at: new Date().toISOString() }).eq("id", planId);
+  await db.from("plans").update({ thread_id: thread.id, event_id: eventId, making_at: null, updated_at: new Date().toISOString() }).eq("id", planId);
   // a yes that landed while this ran is not in `going`: read the members again
   await syncThreadMembers(planId, thread.id as string, plan.starter_id);
+  if (eventId) await posterFor(planId, eventId, draft.poster_prompt, settings);
+}
 
-  if (settings.posters_on && made.poster_prompt) {
-    // awaited: a serverless host freezes the function once this returns, and the poster would never land.
-    // callers run this inside after(), so no response waits on it.
-    await makePoster(planId, event.id as string, made.poster_prompt, settings.muse_replay).catch((e) => console.error("poster failed:", e));
-  }
+type EventDraft = { event_title: string; event_description: string; poster_prompt: string };
+
+// the plan's private mock event. picks up one an earlier, failed attempt already made.
+async function insertEvent(plan: Plan, d: EventDraft, startsAt: Date | null): Promise<string> {
+  const db = serverDb();
+  const { data: old } = await db.from("events").select("id").eq("plan_id", plan.id).limit(1).maybeSingle();
+  if (old) return old.id as string;
+  const { data: event, error } = await db
+    .from("events")
+    .insert({ plan_id: plan.id, host_id: plan.starter_id, title: d.event_title, description: d.event_description, starts_at: startsAt?.toISOString() ?? null, location: plan.where_text })
+    .select("id")
+    .single();
+  if (error || !event) throw new Error(`event insert: ${error?.message}`);
+  return event.id as string;
+}
+
+async function posterFor(planId: string, eventId: string, prompt: string, settings: Awaited<ReturnType<typeof getSettings>>): Promise<void> {
+  if (!settings.posters_on || !prompt) return;
+  // awaited: a serverless host freezes the function once this returns, and the poster would never land.
+  // callers run this inside after(), so no response waits on it.
+  await makePoster(planId, eventId, prompt, settings.muse_replay).catch((e) => console.error("poster failed:", e));
+}
+
+/**
+ * the starter taps "make the event" on a plan that is on and whose event waited for them.
+ * makes the same in-app mock event quorum would have made, from what muse already wrote for it
+ * (no new muse call), and points the chat's plan card at it. returns the event id.
+ */
+export async function makeEvent(planId: string, userId: string): Promise<{ eventId: string; prompt: string }> {
+  const b = await loadBundle(planId);
+  const plan = b?.plan;
+  if (!plan || plan.starter_id !== userId) throw new PlanError("plan not found", 404);
+  if (plan.state !== "happening" || !plan.muse_on || !plan.thread_id) throw new PlanError("the event can be made once the plan is on", 409);
+  if (plan.event_id) return { eventId: plan.event_id, prompt: "" };
+  const db = serverDb();
+  const saved = (await cacheGet(`event_draft_${planId}`)) as Partial<EventDraft> | null;
+  const draft: EventDraft = {
+    event_title: saved?.event_title ?? plan.activity ?? "A plan",
+    event_description: saved?.event_description ?? `${plan.activity}, ${plan.when_text}.`,
+    poster_prompt: saved?.poster_prompt ?? "",
+  };
+  const startsAt = isDay(plan.when_day) && isTime(plan.when_time) ? nextOccurrence(plan.when_day, plan.when_time) : null;
+  const eventId = await insertEvent(plan, draft, startsAt);
+  await db.from("plans").update({ event_id: eventId, updated_at: new Date().toISOString() }).eq("id", planId).is("event_id", null);
+  const { data: card } = await db.from("messages").select("id,card").eq("thread_id", plan.thread_id).not("card", "is", null).limit(1).maybeSingle();
+  if (card) await db.from("messages").update({ card: { ...(card.card as Record<string, unknown>), event_id: eventId } }).eq("id", card.id);
+  return { eventId, prompt: draft.poster_prompt };
+}
+
+/** runs after the response: the poster for an event the starter made themselves */
+export async function posterForEvent(planId: string, eventId: string, prompt: string): Promise<void> {
+  await posterFor(planId, eventId, prompt, await getSettings());
+}
+
+// muse's picks the starter took off a draft, with muse's reason, for the starter alone
+async function skippedPicks(planId: string, known: Map<string, User>): Promise<Array<{ user: Person; reason: string | null }>> {
+  const db = serverDb();
+  const { data: rows } = await db.from("plan_skips").select("user_id,reason").eq("plan_id", planId).order("created_at");
+  if (!rows || rows.length === 0) return [];
+  const missing = rows.map((r) => r.user_id as string).filter((id) => !known.has(id));
+  const { data: more } = missing.length > 0 ? await db.from("users").select("*").in("id", missing) : { data: [] };
+  const users = new Map([...known, ...((more ?? []) as User[]).map((u) => [u.id, u] as const)]);
+  return rows.flatMap((r) => {
+    const u = users.get(r.user_id as string);
+    return u ? [{ user: person(u), reason: (r.reason as string | null) ?? null }] : [];
+  });
 }
 
 // muse image takes ~45s. the event shows a gradient until this lands.
