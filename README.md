@@ -117,6 +117,14 @@ cd web && pnpm test:discover        # 57 thoughts through the real search, no da
 
 known limits: events only surface at times the person is free, so a morning run never shows for maya (she is free from 11); day and evening words are read by rules, not by muse; weeknight events do not exist in the catalog; listings have no photos beyond the original 22.
 
+### changing a draft before it goes out
+
+verified current behavior on the server (run against the hosted database: add, remove, a refused non-friend, a refused other person, and a muse redo that moved the day); the screen itself builds but has not been exercised on a device. sending a signal and sending the plan are two steps: "Send a signal" puts the thought where the chosen friends can see and join it and has muse draft a plan; "Ask these friends" on the draft sends muse's private ask to each person on it. between the two, the draft is the starter's to change:
+
+- **who gets asked:** take anyone off, or add any of your own friends muse did not pick (`POST /api/plans/[id]/picks`, `web/lib/draft.ts`). an added friend gets a plain ask built from the plan, not one muse wrote. no muse call.
+- **what the plan is:** tell muse what to change in plain words ("make it sunday", "somewhere cheaper"). muse redoes the plan knowing the first draft and the request, and the old draft is replaced (`POST /api/muse/match` with `{ planId, revise }`). one muse call. the redo starts from muse again, so people added or removed by hand before it are not carried over, and a friend who is not free at the new time is still left out.
+- only the starter can do either, and only while the plan is a draft. nobody is asked or told anything by these edits.
+
 ### who a signal goes to
 
 verified current behavior on the server and in the composer: a signal goes to **close friends**, **friends only** or **friends of friends**. "only muse" is no longer a choice. close friends is a flag on a friendship (`friendships.close`, migration `0008`): it is one person's call about another, it is seeded (maya's close friends are alex, jo and sam) and there is no screen to edit it yet. a close-friends signal is shown only to the people its author marked close, and muse picks from them alone. a thought started from a reel is an invite like any other; the text handed over never names who liked the reel. `muse` (nobody) remains as a stored value for retired signals and older builds.

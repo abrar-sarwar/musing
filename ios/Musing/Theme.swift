@@ -74,7 +74,8 @@ enum Copy {
     static let privateLimit = "Just between us"
     static let happening = "It's happening"
     static let runItBack = "Run it back"
-    static let sendIt = "Send it"
+    // the draft's own step: the signal is already out, this sends muse's private ask to each person picked
+    static let sendIt = "Ask these friends"
     static let notThis = "Not this"
     static let pass = "Can't make it"
     static let solving = "muse is reworking it"

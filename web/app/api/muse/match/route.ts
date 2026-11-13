@@ -1,6 +1,7 @@
 import { serverDb } from "@/lib/db/server";
 import { describeContext, discover, validContext } from "@/lib/discover";
-import { fail, requireUser } from "@/lib/http";
+import { dropDraft, museOfDraft } from "@/lib/draft";
+import { cleanText, fail, requireUser } from "@/lib/http";
 import { match, type Candidate } from "@/lib/muse/match";
 import { sseResponse } from "@/lib/muse/sse";
 import { UnderstandSchema } from "@/lib/muse/understand";
@@ -13,13 +14,18 @@ import { isFreeAt, todayLine } from "@/lib/when";
 const MAX_MUTUALS = 8;
 
 // the mix. POST { museId, audience? } -> sse: "delta" {text}..., "done" {planId, source, latencyMs}
+// to change a draft by talking to muse: POST { planId, revise } with the draft's id and what to
+// change. muse redoes the plan with that in mind and the old draft is replaced.
 // the plan it makes is a draft: only the starter sees it until they send it.
 export async function POST(req: Request) {
   try {
-    const body = (await req.json().catch(() => ({}))) as { museId?: unknown; audience?: unknown };
-    // who muse may ask: friends (the default), or friends plus people who share a friend
-    const museId = typeof body.museId === "string" ? body.museId : "";
+    const body = (await req.json().catch(() => ({}))) as { museId?: unknown; audience?: unknown; planId?: unknown; revise?: unknown };
     const user = await requireUser();
+    // a change to a draft: only its starter can ask, and only while it is still a draft
+    const reviseAsk = cleanText(body.revise, 200);
+    const oldPlanId = reviseAsk && typeof body.planId === "string" ? body.planId : null;
+    // who muse may ask: friends (the default), or friends plus people who share a friend
+    const museId = oldPlanId ? ((await museOfDraft(oldPlanId, user.id)) ?? "") : typeof body.museId === "string" ? body.museId : "";
     const settings = await getSettings();
     if (!settings.muse_on) return Response.json({ ok: false, error: "muse is off" }, { status: 409 });
 
@@ -70,7 +76,16 @@ export async function POST(req: Request) {
     const t0 = Date.now();
     // the starter's own groups, so a private group of theirs can be found. nobody else's are read.
     const { data: memberships } = await db.from("group_members").select("group_id").eq("user_id", user.id);
-    const found = await discover({ text: muse.raw_text as string, activity: understood.data.activity, budgetHint: understood.data.budget_hint, starterFree: user.free_windows, context, interests: user.interests, memberOf: (memberships ?? []).map((m) => m.group_id as string) });
+    // what the old draft said, so muse changes it rather than starting over
+    let revise: { ask: string; draft: string } | null = null;
+    if (oldPlanId && reviseAsk) {
+      const [{ data: old }, { data: asked }] = await Promise.all([
+        db.from("plans").select("activity,when_text,where_text").eq("id", oldPlanId).maybeSingle(),
+        db.from("plan_members").select("user_id").eq("plan_id", oldPlanId),
+      ]);
+      revise = { ask: reviseAsk, draft: `${old?.activity ?? "a plan"}, ${old?.when_text ?? "no time yet"}, ${old?.where_text ?? "no place yet"}, asking ${(asked ?? []).map((a) => a.user_id).join(", ") || "nobody yet"}` };
+    }
+    const found = await discover({ text: `${muse.raw_text as string}${reviseAsk ? ` ${reviseAsk}` : ""}`, activity: understood.data.activity, budgetHint: understood.data.budget_hint, starterFree: user.free_windows, context, interests: user.interests, memberOf: (memberships ?? []).map((m) => m.group_id as string) });
     const startedFrom = await describeContext(context);
     const discoverMs = Date.now() - t0;
 
@@ -85,7 +100,9 @@ export async function POST(req: Request) {
           today: todayLine(),
           found: { events: found.events, groups: found.groups, listings: found.listings },
           startedFrom,
-          preferCache: settings.muse_replay,
+          revise,
+          // a change request is always a fresh answer
+          preferCache: revise ? false : settings.muse_replay,
         },
         (delta) => send("delta", { text: delta }),
         () => send("restart", {}),
@@ -95,6 +112,8 @@ export async function POST(req: Request) {
       const free = r.data.picks.filter((p) => isFreeAt(candidates.find((c) => c.id === p.user_id)?.free_windows ?? [], r.data.when_day, r.data.when_time));
       const picks = free.length > 0 ? free : r.data.picks;
       const planId = await createDraftFromMatch(muse.id as string, user.id, { ...r.data, picks }, { waitFor: (muse.wait_for as number | null) ?? 2, expiresAt: (muse.expires_at as string | null) ?? null });
+      // the new draft stands in for the old one
+      if (oldPlanId) await dropDraft(oldPlanId, user.id);
       send("done", { planId, source: r.source, latencyMs: r.latencyMs });
     });
   } catch (e) {

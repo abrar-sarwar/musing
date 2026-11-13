@@ -558,7 +558,14 @@ struct PlanScreen: View {
         }
 
         // the mix: starter only
-        if starter, let picks = p.picks, !picks.isEmpty, p.state != "happening", p.state != "faded" {
+        // a draft is still the starter's to change: who is asked, and what muse planned
+        if starter, p.state == "draft" {
+            DraftEditor(plan: p, onChanged: { plan = $0 }, onReplaced: { id in
+                app.back()
+                app.push(.plan(id))
+            })
+        }
+        if starter, let picks = p.picks, !picks.isEmpty, p.state != "happening", p.state != "faded", p.state != "draft" {
             Button { withAnimation(.easeOut(duration: 0.15)) { matchedOpen.toggle() } } label: {
                 HStack {
                     SectionTitle("Matched friends")
@@ -592,6 +599,7 @@ struct PlanScreen: View {
                     act("send") { try await API.data("POST", "/api/plans/\(planId)/send", user: app.userId) }
                 }
                 QuietButton(label: Copy.notThis, fill: true, outline: true) { cancel() }
+                fine("Your signal is already out for friends to see and join. This step sends muse's private ask to each person above. Nobody sees who else was asked.")
             }
 
             if !starter, open, !whatIfOpen {

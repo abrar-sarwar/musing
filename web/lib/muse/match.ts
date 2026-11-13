@@ -53,6 +53,8 @@ export type MatchInput = {
   found: Candidates;
   /** one line on where the thought started (a listing, an event, a group, a reel), if anywhere */
   startedFrom: string | null;
+  /** the starter read a first draft and asked for a change, in their words. the draft itself is described alongside. */
+  revise?: { ask: string; draft: string } | null;
   planId?: string | null;
   preferCache?: boolean;
 };
@@ -106,7 +108,7 @@ function userPrompt(i: MatchInput): string {
     : "";
   return `today is ${i.today}.
 starter: ${i.starter.firstName} | interests: ${i.starter.interests.join(", ")} | free: ${windowsLine(i.starter.free_windows)}
-they typed: "${i.rawText}"
+they typed: "${i.rawText}"${i.revise ? `\nyou already drafted this: ${i.revise.draft}\nthey read it and asked you to change it: "${i.revise.ask}"\nmake that change. keep everything they did not ask to change (the activity, the day, the people) when the rules still allow it. if they named a friend to add or drop, do it when that friend is a candidate and free.` : ""}
 what you understood: activity=${i.understood.activity}; time=${i.understood.time_hint}; vibe=${i.understood.vibe}; budget=${i.understood.budget_hint}; group=${i.understood.group_size_hint}
 
 candidate friends:
