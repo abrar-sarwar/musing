@@ -33,6 +33,8 @@ struct SignalComposer: View {
     /// how many friends have to be in before it's on
     @State private var waitFor = 2
     @State private var expires = "1w"
+    /// make the in-app event the moment enough people are in, or leave it for the starter to tap
+    @State private var autoEvent = true
     @State private var context: SignalContext?
     @State private var foundLine: String?
     @FocusState private var focused: Bool
@@ -74,6 +76,8 @@ struct SignalComposer: View {
             OptionRow(label: "Send to", options: [("close", "Close friends"), ("friends", "Friends only"), ("mutual", "Friends of friends")], selection: $audience, disabled: busy)
             OptionRow(label: "Wait for at least", options: (1...5).map { ($0, peopleCount($0)) }, selection: $waitFor, disabled: busy)
             OptionRow(label: "Expires after", options: [("1d", "1 day"), ("3d", "3 days"), ("1w", "1 week"), ("2w", "2 weeks")], selection: $expires, disabled: busy)
+            // without muse a plan stops at the count, so there is no event to choose about
+            if museOn { OptionRow(label: "Event when it's on", options: [(true, "Make it for me"), (false, "I'll make it")], selection: $autoEvent, disabled: busy) }
 
             GradientButton(label: phase == .reading ? "Muse is reading" : phase == .mixing ? (museOn ? "Finding your people" : "Sending") : "Send a signal", big: true, busy: busy, disabled: !canSend) { send() }
             HStack(alignment: .top, spacing: 8) {
@@ -188,7 +192,7 @@ struct SignalComposer: View {
         work?.cancel()
         let thought = trimmed
         let user = app.userId
-        var body: [String: Any] = ["text": thought, "audience": audience, "waitFor": waitFor, "expires": expires]
+        var body: [String: Any] = ["text": thought, "audience": audience, "waitFor": waitFor, "expires": expires, "autoEvent": autoEvent]
         if let context { body["context"] = ["kind": context.kind, "id": context.id] }
         work = Task {
             do {
@@ -510,6 +514,10 @@ struct PlanScreen: View {
         act("cancel", leaveAfter: true) { try await API.data("DELETE", "/api/plans/\(planId)", user: app.userId) }
     }
 
+    private func makeEvent(_ id: String) {
+        act("event") { try await API.data("POST", "/api/plans/\(id)/event", user: app.userId) }
+    }
+
     @ViewBuilder private func content(_ p: PlanView) -> some View {
         let starter = p.role == "starter"
         let need = max(0, p.quorum - p.downCount)
@@ -645,7 +653,13 @@ struct PlanScreen: View {
                 } else {
                     fine("Enough people said yes. Without muse there's no chat or event made for you. That part is on you.")
                 }
-                if let event = p.eventId { QuietButton(label: "See the event", fill: true) { app.push(.event(event)) } }
+                if let event = p.eventId {
+                    QuietButton(label: "See the event", fill: true) { app.push(.event(event)) }
+                } else if starter, p.museOn, p.threadId != nil {
+                    // the starter chose to make it themselves. a mock event in the app, nothing is published.
+                    QuietButton(label: busy == "event" ? "Making the event" : "Make the event", disabled: busy != nil, fill: true) { makeEvent(p.id) }
+                    fine("You chose to make the event yourself. It's a mock event in the app, seen by the people going.")
+                }
             }
 
             if starter, p.state == "faded" {

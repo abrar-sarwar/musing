@@ -9,18 +9,45 @@ func formatEventDate(_ iso: String?) -> String {
 
 private let eventQuery = "select=*,host:users!events_host_id_fkey(*)"
 
+/// a recommended public event and its line, for the "for you" list
+private struct ForYou: Identifiable {
+    let event: PublicEvent
+    let line: String
+    var id: String { event.id }
+}
+
 struct EventsScreen: View {
     @EnvironmentObject var app: AppState
     @State private var events: [EventRow] = []
     @State private var status = "Loading…"
     // a short list first. the whole fictional catalog is one tap away, never dumped on the screen.
     @State private var showAll = false
+    /// the public events ranked for this person by the server (the reels rule), the top few with a line
+    @State private var feed: [EventPick] = []
+
+    /// the catalog in the server's order. anything the ranking doesn't know keeps its catalog place, last.
+    private var ranked: [PublicEvent] {
+        let all = app.catalog?.events ?? []
+        let rank = Dictionary(feed.enumerated().map { ($0.element.eventId, $0.offset) }, uniquingKeysWith: { a, _ in a })
+        return all.enumerated().sorted { (rank[$0.element.id] ?? feed.count + $0.offset) < (rank[$1.element.id] ?? feed.count + $1.offset) }.map(\.element)
+    }
+    private var forYou: [ForYou] {
+        feed.compactMap { pick in
+            guard let line = pick.line, let ev = app.catalog?.events.first(where: { $0.id == pick.eventId }) else { return nil }
+            return ForYou(event: ev, line: line)
+        }
+    }
 
     var body: some View {
         SubScreen(title: "Events") {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 8) {
-                    if let found = app.catalog?.events, !found.isEmpty {
+                    if !forYou.isEmpty {
+                        Text("For you").font(.system(size: 20, weight: .bold)).foregroundStyle(FB.text).padding(.horizontal, 12).padding(.top, 12).padding(.bottom, 4)
+                        ForEach(forYou) { item in recommended(item.event, line: item.line) }
+                    }
+                    let found = ranked
+                    if !found.isEmpty {
                         Text("Discover").font(.system(size: 20, weight: .bold)).foregroundStyle(FB.text).padding(.horizontal, 12).padding(.top, 12).padding(.bottom, 4)
                         ForEach(showAll ? found : Array(found.prefix(8))) { ev in
                             Button { app.push(.publicEvent(ev.id)) } label: {
@@ -70,7 +97,29 @@ struct EventsScreen: View {
         .onTableChange("events") { Task { await load() } }
     }
 
+    /// one recommended event: the row, muse's nudge, and a tap that starts a plan from it
+    private func recommended(_ ev: PublicEvent, line: String) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button { app.push(.publicEvent(ev.id)) } label: {
+                DiscoverRow(cover: ev.cover, topic: ev.tags?.first, title: ev.title, sub: "\(sentenceCase(ev.whenText)) · \(ev.area)", detail: "\(ev.priceText) · mock event")
+            }
+            .buttonStyle(FadePress())
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "sparkles").font(.system(size: 13, weight: .semibold)).foregroundStyle(Muse.start)
+                    Text(line).font(.system(size: 14)).foregroundStyle(Muse.text).fixedSize(horizontal: false, vertical: true)
+                }
+                MoveFromThis(sub: "make it a plan. muse asks the friends who are free then.") {
+                    app.makeAMove("go to the \(ev.title.lowercased()) with friends", from: SignalContext(kind: "event", id: ev.id, title: ev.title))
+                }
+            }
+            .padding(.horizontal, 12).padding(.bottom, 12).background(Color.white)
+        }
+    }
+
     private func load() async {
+        if app.catalog == nil { await app.loadCatalog() }
+        if let f: EventFeed = try? await API.get("/api/events/recommended", user: app.userId), !Task.isCancelled { feed = f.events }
         do {
             let rows: [EventRow] = try await Supa.select("events", "\(eventQuery)&order=starts_at.asc")
             guard !Task.isCancelled else { return }
