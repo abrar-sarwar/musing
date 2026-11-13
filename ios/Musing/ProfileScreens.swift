@@ -344,7 +344,7 @@ struct SearchScreen: View {
     var body: some View {
         let term = q.trimmingCharacters(in: .whitespaces).lowercased()
         let people = Array(app.users.filter { term.isEmpty || $0.name.lowercased().contains(term) || $0.interests.contains { $0.contains(term) } }.prefix(term.isEmpty ? 6 : 12))
-        let listings = term.isEmpty ? [] : Array(Mock.listings.filter { $0.title.lowercased().contains(term) || $0.category.lowercased().contains(term) }.prefix(8))
+        let listings = term.isEmpty ? [] : Array(app.listings.filter { $0.title.lowercased().contains(term) || $0.category.lowercased().contains(term) || ($0.topic ?? "").contains(term) }.prefix(8))
         VStack(spacing: 0) {
             HStack(spacing: 4) {
                 Button { app.back() } label: { Image(systemName: "chevron.left").font(.system(size: 22, weight: .semibold)).foregroundStyle(FB.text).frame(width: 36, height: 40) }
@@ -379,7 +379,7 @@ struct SearchScreen: View {
                     ForEach(listings) { l in
                         Button { app.push(.listing(l.id)) } label: {
                             HStack(spacing: 12) {
-                                Pic(path: l.image).frame(width: 44, height: 44).clipShape(RoundedRectangle(cornerRadius: 8))
+                                CoverArt(path: l.image, topic: l.topic ?? l.category).frame(width: 44, height: 44).clipShape(RoundedRectangle(cornerRadius: 8))
                                 VStack(alignment: .leading, spacing: 0) {
                                     Text(l.title).font(.system(size: 16, weight: .semibold)).foregroundStyle(FB.text)
                                     Text("\(money(l.price)) · \(l.place)").font(.system(size: 13.5)).foregroundStyle(FB.muted)

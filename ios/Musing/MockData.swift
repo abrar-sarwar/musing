@@ -64,7 +64,13 @@ enum Mock {
     struct Listing: Identifiable {
         let id: String; let title: String; let price: Int; var was: Int?; var nearby = false
         let category: String; let seller: String; let place: String; let about: String
-        var image: String { "market/\(id).jpg" }
+        // set for a listing that came from the catalog rather than this file
+        var condition: String? = nil
+        var topic: String? = nil
+        var fromCatalog = false
+        var photo: String? = nil
+        /// the bundled photo, if there is one. a catalog listing without one gets drawn art.
+        var image: String? { fromCatalog ? photo : "market/\(id).jpg" }
     }
     static let listings = [
         Listing(id: "car", title: "1967 roadster, runs great", price: 6500, was: 7800, category: "Vehicles", seller: "dev", place: "Decatur, GA", about: "Garage kept. New tires last spring. Clean title, cash only."),

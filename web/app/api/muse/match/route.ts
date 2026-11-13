@@ -65,7 +65,9 @@ export async function POST(req: Request) {
     // discovery: fast server-side search before muse is called. muse chooses among these.
     const context = await validContext(muse.context);
     const t0 = Date.now();
-    const found = await discover({ text: muse.raw_text as string, activity: understood.data.activity, budgetHint: understood.data.budget_hint, starterFree: user.free_windows, context });
+    // the starter's own groups, so a private group of theirs can be found. nobody else's are read.
+    const { data: memberships } = await db.from("group_members").select("group_id").eq("user_id", user.id);
+    const found = await discover({ text: muse.raw_text as string, activity: understood.data.activity, budgetHint: understood.data.budget_hint, starterFree: user.free_windows, context, interests: user.interests, memberOf: (memberships ?? []).map((m) => m.group_id as string) });
     const startedFrom = await describeContext(context);
     const discoverMs = Date.now() - t0;
 

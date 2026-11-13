@@ -1,5 +1,5 @@
 import { serverDb } from "@/lib/db/server";
-import { catalog, planOpportunities, topicsFor, type Listing, type PublicEvent } from "@/lib/discover";
+import { catalog, eligible, planOpportunities, topicsFor, type Listing, type PublicEvent } from "@/lib/discover";
 import { answerRoute, routeAsk } from "@/lib/chatRouter";
 import { chat } from "@/lib/muse/chat";
 import { trace } from "@/lib/muse/run";
@@ -196,7 +196,8 @@ export async function museReply(threadId: string, userId: string, ask: MuseAsk, 
   await ping(threadId);
 
   try {
-    const c = await catalog();
+    // only what a person could act on: nothing cancelled, sold or private
+    const c = eligible(await catalog());
     const people = going(b);
     const free = sharedFree(people);
     const fixed = b.plan.public_event_id ? (c.events.find((e) => e.id === b.plan.public_event_id) ?? null) : null;

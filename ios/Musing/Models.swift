@@ -115,6 +115,8 @@ struct Opportunity: Decodable, Identifiable, Hashable {
     let sub: String
     let reason: String?
     let cover: String?
+    /// the record's main topic key, for drawn cover art when there is no photo
+    let topic: String?
 }
 
 struct PublicEvent: Decodable, Identifiable {
@@ -127,6 +129,13 @@ struct PublicEvent: Decodable, Identifiable {
     let capacity: Int?
     let groupId: String?
     let cover: String?
+    // the bigger catalog. optional so an older server still decodes.
+    let tags: [String]?
+    let category: String?
+    let price: Int?
+    let online: Bool?
+    /// "Free" or "$12"
+    var priceText: String { (price ?? 0) == 0 ? "Free" : "$\(price ?? 0)" }
 }
 
 struct GroupRow: Decodable, Identifiable {
@@ -137,11 +146,42 @@ struct GroupRow: Decodable, Identifiable {
     let cover: String?
     let memberCount: Int
     let activity: [String]
+    let tags: [String]?
+    let category: String?
+    let visibility: String?
+}
+
+/// a marketplace listing from the fictional catalog. only available ones are sent.
+struct CatalogListing: Decodable, Identifiable {
+    let id: String
+    let title: String
+    let price: Int
+    let category: String
+    let place: String
+    let tags: [String]
+    let sellerId: String
+    let description: String?
+    let condition: String?
+    let cover: String?
+}
+
+/// a fictional creator's reel. catalog content, not anyone's viewing history.
+struct CatalogReel: Decodable, Identifiable {
+    let id: String
+    let topic: String
+    let title: String
+    let caption: String
+    let creator: String
+    let pitch: String
+    let tags: [String]
+    let poster: String?
 }
 
 struct Catalog: Decodable {
     let events: [PublicEvent]
     let groups: [GroupRow]
+    let listings: [CatalogListing]?
+    let reels: [CatalogReel]?
     let saved: [String] // "kind:id" for this person only
 }
 

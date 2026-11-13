@@ -13,6 +13,8 @@ struct EventsScreen: View {
     @EnvironmentObject var app: AppState
     @State private var events: [EventRow] = []
     @State private var status = "Loading…"
+    // a short list first. the whole fictional catalog is one tap away, never dumped on the screen.
+    @State private var showAll = false
 
     var body: some View {
         SubScreen(title: "Events") {
@@ -20,9 +22,16 @@ struct EventsScreen: View {
                 LazyVStack(alignment: .leading, spacing: 8) {
                     if let found = app.catalog?.events, !found.isEmpty {
                         Text("Discover").font(.system(size: 20, weight: .bold)).foregroundStyle(FB.text).padding(.horizontal, 12).padding(.top, 12).padding(.bottom, 4)
-                        ForEach(found) { ev in
+                        ForEach(showAll ? found : Array(found.prefix(8))) { ev in
                             Button { app.push(.publicEvent(ev.id)) } label: {
-                                DiscoverRow(cover: ev.cover, title: ev.title, sub: "\(sentenceCase(ev.whenText)) · \(ev.area)", detail: "By \(ev.organizer) · mock event")
+                                DiscoverRow(cover: ev.cover, topic: ev.tags?.first, title: ev.title, sub: "\(sentenceCase(ev.whenText)) · \(ev.area)", detail: "\(ev.priceText) · by \(ev.organizer) · mock event")
+                            }
+                            .buttonStyle(FadePress())
+                        }
+                        if !showAll, found.count > 8 {
+                            Button { showAll = true } label: {
+                                Text("See all \(found.count) events").font(.system(size: 15, weight: .bold)).foregroundStyle(FB.text).frame(maxWidth: .infinity).frame(height: 40)
+                                    .background(FB.button, in: RoundedRectangle(cornerRadius: 8)).padding(.horizontal, 12)
                             }
                             .buttonStyle(FadePress())
                         }

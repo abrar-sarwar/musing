@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit",
     "test:leak": "node --import tsx scripts/leak.test.ts",
     "test:router": "node --import tsx scripts/router.test.ts",
+    "test:discover": "node --import tsx scripts/discover.test.ts",
     "test:signals": "node --import tsx scripts/signals.test.ts",
     "eval:muse": "node --env-file=.env.local --import tsx scripts/muse-eval.ts"
   },

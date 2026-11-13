@@ -83,7 +83,7 @@ If you add a route folder under `web/app/api` while `pnpm dev` is running and it
 
 muse plans with more than friends. before the mix, the server searches a fictional catalog that represents facebook Events, Groups and Marketplace listings, then hands muse the few records that fit the thought and the starter's free time. muse builds one plan from them and may use at most one event, one group and two listings, or none.
 
-- `web/lib/discover.ts` is the search (`searchMockEvents`, `searchMockGroups`, `searchMockMarketplace`, `getRelatedOpportunities`). it runs in a few milliseconds and makes no muse call.
+- `web/lib/discover.ts` is the search (`discover`, `searchEvents`, `searchGroups`, `searchListings`, `getRelatedOpportunities`). it runs in a few milliseconds and makes no muse call.
 - `web/lib/muse/match.ts` rejects any event, group or listing id the search did not return. a plan built on a public event takes its day, time and place from the catalog, and a later "what if" cannot move it.
 - the public event stays in `public_events`. the plan's own private event is still made in `events` at quorum, and the chat card links back to the public one.
 - a thought can start from a listing, a public event, a group or a reel ("make a move from this"). the app sends that context with the thought, so nothing is typed twice.
@@ -92,6 +92,28 @@ muse plans with more than friends. before the mix, the server searches a fiction
 five thoughts to try as maya: "lowkey wanna go thrifting saturday" (event + group + listings), "i wanna do a room makeover" (listings + group), "make a move" on the photography reel or the camera listing (event + listing), "game night this weekend" (group + listing), "need something to do this weekend" (event).
 
 on a deployed server, `POST /api/reset` and `POST /api/settings` need an `x-admin-token` header matching `ADMIN_TOKEN`. a local dev server stays open.
+
+### the bigger catalog (200 more records)
+
+verified current behavior: the catalog holds 61 public events, 51 groups, 102 marketplace listings and 20 reels. the original rows are in `web/lib/seed/data.ts`; the 200 added ones (55 events, 45 groups, 80 listings, 20 reels) are in `web/lib/seed/catalog.ts`. all of it is invented for the prototype. none of it is a real event, community, seller, listing or creator, and none of it is read from facebook.
+
+- **what it covers:** fashion and thrifting, basketball and other pickup sports, fitness, running, gaming, board games, anime and cosplay, music, film, dance, food, cooking, coffee, art, crafts, photography, tech and ai, cybersecurity, study, career, outdoors and camping, volunteering, books, pets, plants, home, travel and language, and plain "meet people". events belong to groups (`group_id`), groups have members among the seeded people, and listings, events, groups and reels share topic tags, so one thought pulls in several surfaces.
+- **search:** `web/lib/discover.ts` reads a thought for topics (with everyday wording: "hoop", "cheap fit", "take cute pictures"), the nouns in it ("monitor", "guitar"), a named day, "tonight" or "at night", "free", and money being tight or a stated budget. it filters first (the starter is free then, not cancelled, not sold or pending, not a private group they are not in), ranks second, and hands muse at most 3 events, 2 groups and 4 listings. a thought nothing fits returns nothing.
+- **the rehearsed lines still find what they found:** the original rows sort first on a tie, and `pnpm test:discover` pins the thrift line to the saturday vintage pop-up.
+- **not shown or recommended:** one cancelled event, two sold listings, one pending listing and two private groups are in the tables on purpose, so the filters have something to filter.
+- **reels:** the 20 catalog reels are fictional creators' clips. they are separate from `reels_topics` (a person's own consent-gated signal). watching one writes nothing; "this could be us" on a reel starts a thought only when tapped.
+- **pictures:** a record with a fitting bundled photo uses it. the rest (every added listing) get drawn art from `ios/Musing/CoverArt.swift`: a soft gradient and a symbol for the topic.
+- **people:** a few seeded friends gained interests (basketball, coding, guitar, video games, volunteering, dance) and friday or saturday evening free time so more kinds of thought find a friend. friendships are unchanged.
+
+```bash
+supabase migration up               # once, adds 0007_catalog_expansion
+cd web && pnpm seed                 # wipes the demo state and reloads everything; safe to run again, ids are stable
+cd web && pnpm test:discover        # 57 thoughts through the real search, no database, no muse call
+```
+
+"Reset demo data" in the app does the same reload as `pnpm seed`. thoughts worth trying as maya: "anyone down for basketball", "i wanna get into photography but cameras are expensive", "i wanna learn guitar but i'm broke", "i'm bored tonight", "what can i do for free", "lowkey wanna go hiking", "let's have a game night", "i need a study buddy", "i wanna volunteer", "i need to meet people".
+
+known limits: events only surface at times the person is free, so a morning run never shows for maya (she is free from 11); day and evening words are read by rules, not by muse; weeknight events do not exist in the catalog; listings have no photos beyond the original 22.
 
 ## product boundaries
 

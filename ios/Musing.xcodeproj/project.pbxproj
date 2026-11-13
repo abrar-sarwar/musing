@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		07EA7F6B331AED1A161FD731 /* SignalScreens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8986DDD56FC74D008F5D520D /* SignalScreens.swift */; };
+		0AA6B8AA2DFC74BECDC7A7A1 /* CoverArt.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7CA14DBC87E619CEC3A1129 /* CoverArt.swift */; };
 		23975D3341C79F772DF85567 /* DiscoverScreens.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE750F1B4A67E4D90E053821 /* DiscoverScreens.swift */; };
 		24FF0AB0FADA07BC46517F7F /* MockData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46CFF1AAB126FDC7E7661239 /* MockData.swift */; };
 		3487ECCB2501C26D2F2197C6 /* TabScreens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B4A18496BC1DF6401775555 /* TabScreens.swift */; };
@@ -62,7 +63,8 @@
 		E81E9D792DB9F1DE268B92EE /* mock */ = {isa = PBXFileReference; lastKnownFileType = folder; name = mock; path = Musing/Resources/mock; sourceTree = SOURCE_ROOT; };
 		EB761A920EFBE3157F38646B /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
 		F0614ADA4DEFC31A507568F8 /* API.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = API.swift; sourceTree = "<group>"; };
-		"TEMP_A01CCD8E-605F-4326-9543-C48A9C7095FF" /* Signing.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Signing.xcconfig; sourceTree = "<group>"; };
+		F7CA14DBC87E619CEC3A1129 /* CoverArt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoverArt.swift; sourceTree = "<group>"; };
+		"TEMP_CBE05FDF-BBAF-4C32-9EBE-F2D9B02A9CA6" /* Signing.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Signing.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -74,6 +76,7 @@
 				486FAEBE1D661DBCF5510D00 /* Assets.xcassets */,
 				CBB047C7D1E0507BE278AD1F /* ChatScreens.swift */,
 				EB761A920EFBE3157F38646B /* Components.swift */,
+				F7CA14DBC87E619CEC3A1129 /* CoverArt.swift */,
 				CE750F1B4A67E4D90E053821 /* DiscoverScreens.swift */,
 				8313505AAD8B203FF396618B /* HomeScreen.swift */,
 				5604F50B9594968202DDCDFE /* Info.plist */,
@@ -127,10 +130,10 @@
 			path = MusingUITests;
 			sourceTree = "<group>";
 		};
-		"TEMP_4E4A499A-CD76-4A13-B214-96CF0FB5DACE" /* ios */ = {
+		"TEMP_C06DA5C0-29B9-427B-ADD0-85023D42489A" /* ios */ = {
 			isa = PBXGroup;
 			children = (
-				"TEMP_A01CCD8E-605F-4326-9543-C48A9C7095FF" /* Signing.xcconfig */,
+				"TEMP_CBE05FDF-BBAF-4C32-9EBE-F2D9B02A9CA6" /* Signing.xcconfig */,
 			);
 			path = ios;
 			sourceTree = "<group>";
@@ -258,6 +261,7 @@
 				F0AD17268F08EE813A6FDF23 /* AppState.swift in Sources */,
 				60EEA2BBDD4F62344CF3D3C6 /* ChatScreens.swift in Sources */,
 				718F26A396187AD21440C2FC /* Components.swift in Sources */,
+				0AA6B8AA2DFC74BECDC7A7A1 /* CoverArt.swift in Sources */,
 				23975D3341C79F772DF85567 /* DiscoverScreens.swift in Sources */,
 				411E27A1D66A9666B92AE4B6 /* HomeScreen.swift in Sources */,
 				B8DFFFD5D5C461A7FF331B1C /* MessagesEvents.swift in Sources */,
@@ -294,7 +298,7 @@
 /* Begin XCBuildConfiguration section */
 		6439779877C455273C3960F4 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = "TEMP_A01CCD8E-605F-4326-9543-C48A9C7095FF" /* Signing.xcconfig */;
+			baseConfigurationReference = "TEMP_CBE05FDF-BBAF-4C32-9EBE-F2D9B02A9CA6" /* Signing.xcconfig */;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
@@ -314,7 +318,7 @@
 		};
 		75ED0AA4A1E4DD7D3A5E2BAC /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = "TEMP_A01CCD8E-605F-4326-9543-C48A9C7095FF" /* Signing.xcconfig */;
+			baseConfigurationReference = "TEMP_CBE05FDF-BBAF-4C32-9EBE-F2D9B02A9CA6" /* Signing.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
@@ -336,7 +340,7 @@
 		};
 		A01E051343FC0473372CF236 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = "TEMP_A01CCD8E-605F-4326-9543-C48A9C7095FF" /* Signing.xcconfig */;
+			baseConfigurationReference = "TEMP_CBE05FDF-BBAF-4C32-9EBE-F2D9B02A9CA6" /* Signing.xcconfig */;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
@@ -356,7 +360,7 @@
 		};
 		D6C91F994409A2337C9319EB /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = "TEMP_A01CCD8E-605F-4326-9543-C48A9C7095FF" /* Signing.xcconfig */;
+			baseConfigurationReference = "TEMP_CBE05FDF-BBAF-4C32-9EBE-F2D9B02A9CA6" /* Signing.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";

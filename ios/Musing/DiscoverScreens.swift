@@ -31,13 +31,14 @@ struct MoveFromThis: View {
 
 struct DiscoverRow: View {
     let cover: String?
+    var topic: String? = nil
     let title: String
     let sub: String
     var detail: String?
 
     var body: some View {
         HStack(spacing: 12) {
-            Pic(path: cover ?? "cover/hills.jpg").frame(width: 56, height: 56).clipShape(RoundedRectangle(cornerRadius: 8))
+            CoverArt(path: cover, topic: topic).frame(width: 56, height: 56).clipShape(RoundedRectangle(cornerRadius: 8))
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(.system(size: 16, weight: .semibold)).foregroundStyle(FB.text).lineLimit(1)
                 Text(sub).font(.system(size: 13)).foregroundStyle(FB.muted).lineLimit(1)
@@ -70,7 +71,7 @@ struct FoundSection: View {
                 let meta = label(o.kind)
                 Button { app.push(o.kind == "event" ? .publicEvent(o.id) : o.kind == "group" ? .group(o.id) : .listing(o.id)) } label: {
                     HStack(spacing: 12) {
-                        Pic(path: o.cover ?? "cover/hills.jpg").frame(width: 48, height: 48).clipShape(RoundedRectangle(cornerRadius: 8))
+                        CoverArt(path: o.cover, topic: o.topic).frame(width: 48, height: 48).clipShape(RoundedRectangle(cornerRadius: 8))
                         VStack(alignment: .leading, spacing: 1) {
                             HStack(spacing: 4) {
                                 Image(systemName: meta.icon).font(.system(size: 10, weight: .semibold))
@@ -101,6 +102,8 @@ struct FoundSection: View {
 // groups discovery, reached from the menu. fictional communities.
 struct GroupsScreen: View {
     @EnvironmentObject var app: AppState
+    // a short list first. the whole fictional catalog is one tap away, never dumped on the screen.
+    @State private var showAll = false
 
     var body: some View {
         SubScreen(title: "Groups") {
@@ -113,7 +116,15 @@ struct GroupsScreen: View {
                         ForEach(mine) { row($0) }
                     }
                     heading("Discover")
-                    ForEach(groups.filter { !app.isSaved("group_join", $0.id) }) { row($0) }
+                    let rest = groups.filter { !app.isSaved("group_join", $0.id) }
+                    ForEach(showAll ? rest : Array(rest.prefix(8))) { row($0) }
+                    if !showAll, rest.count > 8 {
+                        Button { showAll = true } label: {
+                            Text("See all \(rest.count) groups").font(.system(size: 15, weight: .bold)).foregroundStyle(FB.text).frame(maxWidth: .infinity).frame(height: 40)
+                                .background(FB.button, in: RoundedRectangle(cornerRadius: 8)).padding(.horizontal, 12)
+                        }
+                        .buttonStyle(FadePress())
+                    }
                     if groups.isEmpty { Text(app.catalog == nil ? "Loading…" : "No groups yet.").foregroundStyle(FB.muted).frame(maxWidth: .infinity).padding(24) }
                     Text("Fictional groups for this prototype.").font(.system(size: 12.5)).foregroundStyle(FB.muted).frame(maxWidth: .infinity).padding(.top, 8)
                 }
@@ -130,7 +141,7 @@ struct GroupsScreen: View {
 
     private func row(_ g: GroupRow) -> some View {
         Button { app.push(.group(g.id)) } label: {
-            DiscoverRow(cover: g.cover, title: g.name, sub: "\(g.memberCount.formatted()) members · \(g.area)", detail: g.description)
+            DiscoverRow(cover: g.cover, topic: g.tags?.first, title: g.name, sub: "\(g.memberCount.formatted()) members · \(g.area)", detail: g.description)
         }
         .buttonStyle(FadePress())
     }
@@ -147,10 +158,10 @@ struct GroupDetailScreen: View {
                 let events = (app.catalog?.events ?? []).filter { $0.groupId == g.id }
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
-                        Pic(path: g.cover ?? "cover/hills.jpg").aspectRatio(16 / 9, contentMode: .fit)
+                        CoverArt(path: g.cover, topic: g.tags?.first).aspectRatio(16 / 9, contentMode: .fit)
                         VStack(alignment: .leading, spacing: 6) {
                             Text(g.name).font(.system(size: 22, weight: .bold)).foregroundStyle(FB.text)
-                            Text("Public group · \(g.memberCount.formatted()) members · \(g.area)").font(.system(size: 14)).foregroundStyle(FB.muted)
+                            Text("\(g.visibility == "private" ? "Private" : "Public") group · \(g.memberCount.formatted()) members · \(g.area)").font(.system(size: 14)).foregroundStyle(FB.muted)
                             Text(g.description).font(.system(size: 16)).foregroundStyle(FB.text).padding(.top, 2)
                             HStack(spacing: 8) {
                                 action(joined ? "checkmark" : "plus", joined ? "Joined" : "Join group", primary: !joined) {
@@ -169,7 +180,7 @@ struct GroupDetailScreen: View {
                         if !events.isEmpty {
                             SectionLabel("Events from this group")
                             ForEach(events) { ev in
-                                Button { app.push(.publicEvent(ev.id)) } label: { DiscoverRow(cover: ev.cover, title: ev.title, sub: "\(sentenceCase(ev.whenText)) · \(ev.area)") }
+                                Button { app.push(.publicEvent(ev.id)) } label: { DiscoverRow(cover: ev.cover, topic: ev.tags?.first, title: ev.title, sub: "\(sentenceCase(ev.whenText)) · \(ev.area)", detail: ev.priceText) }
                                     .buttonStyle(FadePress())
                             }
                         }
@@ -225,11 +236,12 @@ struct PublicEventScreen: View {
                 let interested = app.isSaved("event", ev.id)
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
-                        Pic(path: ev.cover ?? "cover/hills.jpg").aspectRatio(16 / 9, contentMode: .fit)
+                        CoverArt(path: ev.cover, topic: ev.tags?.first).aspectRatio(16 / 9, contentMode: .fit)
                         VStack(alignment: .leading, spacing: 8) {
                             Text(ev.whenText.uppercased()).font(.system(size: 13, weight: .bold)).foregroundStyle(FB.red)
                             Text(ev.title).font(.system(size: 22, weight: .bold)).foregroundStyle(FB.text)
-                            Label(ev.area, systemImage: "mappin.and.ellipse").font(.system(size: 15)).foregroundStyle(FB.muted)
+                            Label(ev.online == true ? "Online event" : ev.area, systemImage: ev.online == true ? "video" : "mappin.and.ellipse").font(.system(size: 15)).foregroundStyle(FB.muted)
+                            Label(ev.priceText + (ev.category.map { " · \($0)" } ?? ""), systemImage: "ticket").font(.system(size: 15)).foregroundStyle(FB.muted)
                             Label("Public · by \(ev.organizer)\(ev.capacity.map { " · \($0) spots" } ?? "")", systemImage: "globe.americas.fill").font(.system(size: 15)).foregroundStyle(FB.muted)
                             Button { app.setSaved("event", ev.id, !interested) } label: {
                                 HStack(spacing: 6) {
@@ -253,7 +265,7 @@ struct PublicEventScreen: View {
                         .frame(maxWidth: .infinity, alignment: .leading).padding(16).background(Color.white).padding(.top, 8)
                         if let group {
                             SectionLabel("Hosted by a group")
-                            Button { app.push(.group(group.id)) } label: { DiscoverRow(cover: group.cover, title: group.name, sub: "\(group.memberCount.formatted()) members · \(group.area)") }
+                            Button { app.push(.group(group.id)) } label: { DiscoverRow(cover: group.cover, topic: group.tags?.first, title: group.name, sub: "\(group.memberCount.formatted()) members · \(group.area)") }
                                 .buttonStyle(FadePress())
                         }
                     }

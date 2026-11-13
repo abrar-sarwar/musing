@@ -13,6 +13,9 @@ struct Reel: Identifiable, Hashable {
     /// a real clip bundled with the app, and the thought it hands to muse
     var video: URL? = nil
     var pitch: String? = nil
+    /// set for a reel from the fictional catalog: its id there, and a topic key for drawn art
+    var catalogId: String? = nil
+    var art: String? = nil
 }
 
 /// who liked a topic's reel. the screen only ever names opted-in friends.
@@ -68,7 +71,14 @@ struct ReelsScreen: View {
         }
         // the clips come right after one neutral still
         out.insert(contentsOf: videos, at: min(1, out.count))
-        return Array(out.prefix(14 + videos.count))
+        out = Array(out.prefix(14 + videos.count))
+        // catalog reels: fictional creators, spread through the feed two stills apart
+        let more = (app.catalog?.reels ?? []).map { r in
+            Reel(id: "catalog:\(r.id)", topic: r.topic, user: User(id: "creator:\(r.creator)", name: r.creator, avatarSeed: r.creator, bio: nil, interests: []),
+                 caption: r.caption, headline: r.title, poster: r.poster ?? "", pitch: r.pitch, catalogId: r.id, art: r.tags.first)
+        }
+        for (i, r) in more.enumerated() { out.insert(r, at: min(out.count, 3 + i * 3)) }
+        return out
     }
 
     var body: some View {
@@ -96,6 +106,7 @@ struct ReelsScreen: View {
             FbHeader(title: "Reels", actions: [.more, .search, .messenger], dark: true)
         }
         .task(id: app.version) { await load() }
+        .task { if app.catalog == nil { await app.loadCatalog() } }
     }
 
     private func load() async {
@@ -129,7 +140,7 @@ struct ReelsScreen: View {
         let friends = item.video == nil ? [] : likers(item.topic)
         let likes = 900 + stableHash(item.id) % 140000 + friends.count
         return ZStack {
-            Pic(path: item.poster)
+            CoverArt(path: item.poster, topic: item.art)
             if let url = item.video {
                 ReelVideo(url: url, playing: isCurrent && app.tab == .reels && scenePhase == .active, muted: muted)
                     .contentShape(Rectangle())
@@ -147,6 +158,20 @@ struct ReelsScreen: View {
                             FriendsLikedCard(friends: friends, reel: item) { dismissedLikes.insert(item.id) }
                         } else if friends.isEmpty, let overlap, item.topic == overlap.topic, isCurrent, !dismissed {
                             OverlapCard(overlap: overlap) { dismissed = true }
+                        } else if let catalogId = item.catalogId, isCurrent {
+                            // nothing happens from watching. a thought only starts when this is tapped.
+                            Button {
+                                app.makeAMove(item.pitch ?? "this could be us: \(item.topic)", from: SignalContext(kind: "reel", id: catalogId, title: "a reel about \(item.topic)"))
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "sparkles").font(.system(size: 12, weight: .bold))
+                                    Text("this could be us").font(.system(size: 14.5, weight: .bold))
+                                }
+                                .foregroundStyle(Muse.text).padding(.vertical, 8).padding(.horizontal, 12)
+                                .background(Color(hex: 0xfaf7ff, alpha: 0.96), in: Capsule())
+                            }
+                            .buttonStyle(FadePress()).padding(.bottom, 12)
+                            .accessibilityIdentifier("reel-make-a-move")
                         }
                         HStack(spacing: 10) {
                             Avatar(item.user, size: 38)
@@ -361,7 +386,8 @@ struct MarketplaceScreen: View {
                     }
                     .padding(.bottom, tabBarSpace)
                 } else {
-                    let items = tab == "Local" ? Mock.listings.filter(\.nearby) : tab == "More" ? Mock.listings.reversed() : Mock.listings
+                    let all = app.listings
+                    let items = tab == "Local" ? all.filter(\.nearby) : tab == "More" ? all.reversed() : all
                     LazyVGrid(columns: columns, spacing: 0) {
                         ForEach(items) { item in ListingTile(item: item) { app.push(.listing(item.id)) } }
                     }
@@ -371,6 +397,7 @@ struct MarketplaceScreen: View {
             .scrollIndicators(.hidden)
         }
         .background(Color.white)
+        .task { if app.catalog == nil { await app.loadCatalog() } }
     }
 }
 
@@ -382,7 +409,7 @@ struct ListingTile: View {
     var body: some View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 0) {
-                Pic(path: item.image).aspectRatio(1, contentMode: .fit)
+                CoverArt(path: item.image, topic: item.topic ?? item.category).aspectRatio(1, contentMode: .fit)
                     .overlay(alignment: .topLeading) {
                         if item.nearby {
                             Text("Nearby").font(.system(size: 12.5, weight: .medium)).foregroundStyle(FB.text)
@@ -410,16 +437,18 @@ struct ListingScreen: View {
 
     var body: some View {
         SubScreen(title: "Marketplace") {
-            if let item = Mock.listings.first(where: { $0.id == listingId }) {
-                let more = Array(Mock.listings.filter { $0.category == item.category && $0.id != item.id }.prefix(4))
+            let all = app.listings
+            if let item = all.first(where: { $0.id == listingId }) {
+                // the same kind of thing first (a camera next to a camera), then the same category
+                let more = Array((all.filter { $0.id != item.id && item.topic != nil && $0.topic == item.topic } + all.filter { $0.id != item.id && $0.category == item.category && (item.topic == nil || $0.topic != item.topic) }).prefix(4))
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
-                        Pic(path: item.image).aspectRatio(1, contentMode: .fit)
+                        CoverArt(path: item.image, topic: item.topic ?? item.category).aspectRatio(1, contentMode: .fit)
                         VStack(alignment: .leading, spacing: 4) {
                             Text(item.title).font(.system(size: 22, weight: .bold)).foregroundStyle(FB.text)
                             (Text(money(item.price)).fontWeight(.semibold) + Text(item.was.map { "  " + money($0) } ?? "").foregroundStyle(FB.muted).strikethrough())
                                 .font(.system(size: 19)).foregroundStyle(FB.text)
-                            Text("Listed in \(item.place) · \(item.category)").font(.system(size: 14)).foregroundStyle(FB.muted)
+                            Text("Listed in \(item.place) · \(item.category)\(item.condition.map { " · \(sentenceCase($0))" } ?? "")").font(.system(size: 14)).foregroundStyle(FB.muted)
                             HStack(spacing: 8) {
                                 pill("message.fill", "Message", primary: true) { toast("Message sent to the seller. Mock only.") }
                                 pill(app.isSaved("listing", item.id) ? "bookmark.fill" : "bookmark", app.isSaved("listing", item.id) ? "Saved" : "Save") { app.setSaved("listing", item.id, !app.isSaved("listing", item.id)) }
@@ -461,9 +490,10 @@ struct ListingScreen: View {
                     .padding(.bottom, 40)
                 }
             } else {
-                Text("This listing isn't available.").foregroundStyle(FB.muted).padding(24)
+                Text(app.catalog == nil ? "Loading…" : "This listing isn't available.").foregroundStyle(FB.muted).padding(24)
             }
         }
+        .task { if app.catalog == nil { await app.loadCatalog() } }
     }
 
     private func heading(_ t: String) -> some View {
