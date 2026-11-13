@@ -1,7 +1,7 @@
 // the events feed ranking. pnpm test:recommend
 // pure: seed arrays, no database, no muse call. checks the reels rule carries over to events
 // (distinct opted-in friends, then summed score, nothing below the floor) and that no line names anyone.
-import { recommendEvents, ruleLine, topOverlap, FLOOR } from "@/lib/recommend";
+import { pitchFor, recommendEvents, ruleLine, topOverlap, FLOOR } from "@/lib/recommend";
 import type { PublicEvent } from "@/lib/discover";
 import { NEW_PUBLIC_EVENTS } from "@/lib/seed/catalog";
 import { PUBLIC_EVENTS, USERS } from "@/lib/seed/data";
@@ -28,7 +28,10 @@ const cases: Array<[string, unknown, unknown]> = [
   ["cancelled events never recommended", golfFirst.some((r) => r.event.status === "cancelled"), false],
   ["every eligible event is in the feed", golfFirst.length, events.filter((e) => (e.status ?? "scheduled") === "scheduled").length],
   ["own interests lead without friends", mine[0]?.because?.kind, "interest"],
-  ["golf line", ruleLine(golfFirst[0]!), "lowkey this could be fun to set up. 3 of your friends are into golf lately"],
+  ["golf line", ruleLine(golfFirst[0]!), "let's hit the golf course. twilight nine holes is thursday at 5:30, and 3 of your friends are into golf lately"],
+  ["game night says game night", pitchFor(events.find((e) => e.id === "board-game-cafe-night")!), "let's host a game night"],
+  ["topic when the title says nothing", pitchFor({ title: "Saturday Vintage Pop-up", tags: ["thrifting"] }), "let's go thrifting"],
+  ["every event gets its own move", events.every((e) => pitchFor(e).startsWith("let's ")), true],
   ["no line names a person", golfFirst.concat(mine).map(ruleLine).some((l) => names.some((n) => new RegExp(`\\b${n}\\b`).test(l))), false],
 ];
 let bad = 0;

@@ -3,11 +3,11 @@ import { json, requireUser } from "@/lib/http";
 import { getPlanView, PlanError } from "@/lib/plans";
 
 // who a draft will ask, edited by its starter before anything is sent.
-// GET -> { people } the friends the starter could still add, within the signal's audience
-export function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+// GET ?q= -> { people } the friends the starter could still add, within the signal's audience
+export function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   return json(async () => {
     const { id } = await params;
-    return { people: await addablePeople(id, (await requireUser()).id) };
+    return { people: await addablePeople(id, (await requireUser()).id, new URL(req.url).searchParams.get("q") ?? "") };
   });
 }
 

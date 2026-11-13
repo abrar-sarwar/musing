@@ -85,11 +85,35 @@ export function recommendEvents(events: PublicEvent[], rows: ReelsTopic[], viewe
     .map(({ event, because }) => ({ event, because }));
 }
 
-/** the line on a recommended event. counts only, never who, never how we know. */
+// what doing this event together sounds like. the title is read first, since it is the most
+// specific ("game night"), then the event's main topic. plain rules, no model call.
+const BY_TITLE: Array<[RegExp, string]> = [
+  [/game night|board game/, "let's host a game night"], [/karaoke/, "let's do karaoke"], [/trivia/, "let's do trivia night"],
+  [/hike|trail/, "let's go on a hike"], [/swap/, "let's do a clothing swap"], [/watch party|screening|movie/, "let's do a movie night"],
+  [/run club|5k/, "let's run it together"], [/open mic/, "let's hit an open mic"], [/potluck|dinner/, "let's host a dinner"],
+];
+const BY_TOPIC: Record<string, string> = {
+  games: "let's host a game night", gaming: "let's host a gaming night", golf: "let's hit the golf course", thrifting: "let's go thrifting",
+  fashion: "let's go hunt for fits", photography: "let's go on a photo walk", film: "let's do a movie night", music: "let's catch some live music",
+  running: "let's go for a run together", fitness: "let's work out together", basketball: "let's run some pickup", soccer: "let's get a pickup game going",
+  volleyball: "let's play some volleyball", tennis: "let's play some tennis", pickleball: "let's play pickleball", climbing: "let's go climbing",
+  skate: "let's go skating", cycling: "let's go for a ride", outdoors: "let's get outside", food: "let's go eat", cooking: "let's cook together",
+  coffee: "let's grab coffee", art: "let's make some art", crafts: "let's make something", tech: "let's build something", study: "let's study together",
+  books: "let's start a book club", anime: "let's do an anime night", dance: "let's go dancing", volunteering: "let's volunteer together",
+  plants: "let's go plant shopping", social: "let's go meet some people", home: "let's do a decor hunt", career: "let's go network",
+  travel: "let's do a culture day", pets: "let's do a dog day", creators: "let's shoot some content", security: "let's do a ctf night",
+  cozy: "let's do something cozy", sports: "let's play some ball",
+};
+
+/** "let's host a game night": the move this event suggests, from its title, then its topic */
+export function pitchFor(e: Pick<PublicEvent, "title" | "tags">): string {
+  const title = e.title.toLowerCase();
+  return BY_TITLE.find(([rx]) => rx.test(title))?.[1] ?? e.tags.map((t) => BY_TOPIC[t]).find(Boolean) ?? "let's make a day of it";
+}
+
+/** the line on a recommended event. specific to the event; counts only, never who, never how we know. */
 export function ruleLine(r: RecommendedEvent): string {
   const b = r.because;
-  if (b?.kind === "friends") return `lowkey this could be fun to set up. ${b.count} of your friends are into ${b.topic} lately`;
-  if (b?.kind === "interest") return `you're into ${b.topic}. lowkey this could be fun to set up`;
-  if (b?.kind === "free") return `you're free ${r.event.when_text}. lowkey this could be fun to set up`;
-  return "lowkey this could be fun to set up with a few friends";
+  const why = b?.kind === "friends" ? `, and ${b.count} of your friends are into ${b.topic} lately` : b?.kind === "interest" ? `, right up your ${b.topic} alley` : b?.kind === "free" ? ", and you're free then" : "";
+  return `${pitchFor(r.event)}. ${r.event.title.toLowerCase()} is ${r.event.when_text}${why}`;
 }

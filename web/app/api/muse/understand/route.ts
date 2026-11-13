@@ -11,10 +11,10 @@ import { expiresAt, parseAudience, parseWaitFor } from "@/lib/signals";
 import { firstName } from "@/lib/time";
 import { todayLine } from "@/lib/when";
 
-// POST { text, context?, audience?, waitFor?, expires?, autoEvent? } -> sse: "muse" {museId}, "delta" {text}..., "done" {museId, understood, source, latencyMs}
+// POST { text, context?, audience?, waitFor?, expires? } -> sse: "muse" {museId}, "delta" {text}..., "done" {museId, understood, source, latencyMs}
 export async function POST(req: Request) {
   try {
-    const body = (await req.json().catch(() => ({}))) as { text?: unknown; context?: unknown; audience?: unknown; waitFor?: unknown; expires?: unknown; autoEvent?: unknown };
+    const body = (await req.json().catch(() => ({}))) as { text?: unknown; context?: unknown; audience?: unknown; waitFor?: unknown; expires?: unknown };
     const text = typeof body.text === "string" ? body.text.trim() : "";
     if (text.length < 2 || text.length > 280) {
       return Response.json({ ok: false, error: "say a little more (2 to 280 characters)" }, { status: 400 });
@@ -36,8 +36,6 @@ export async function POST(req: Request) {
       audience: parseAudience(body.audience),
       wait_for: parseWaitFor(body.waitFor),
       expires_at: expiresAt(body.expires, new Date()),
-      // the starter's choice in the composer. an app that sends nothing keeps the old behavior: made at quorum
-      auto_event: body.autoEvent !== false,
     }).select("id").single();
     if (error || !muse) throw new Error(error?.message ?? "insert failed");
 

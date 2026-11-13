@@ -1,12 +1,11 @@
--- the starter's say over two things a plan does: whether its mock event is made the moment
--- it is on, and which of muse's picks are asked. plus one seeded golf event for the events feed.
+-- public events made from the composer, the starter's say over which of muse's picks are
+-- asked, and one seeded golf event for the events feed.
 
--- "make the event when it's on". chosen in the composer, kept on the signal, copied to its plan.
--- existing rows keep true, which is what every plan did before this was a choice. off means the
--- starter taps "make the event" on the plan themselves. either way nothing is published: the
--- event is the in-app mock that was always made at quorum.
-alter table muses add column if not exists auto_event boolean not null default true;
-alter table plans add column if not exists auto_event boolean not null default true;
+-- an event a person makes straight from the composer ("create event") is public: anyone in
+-- the app can see it. the event a plan makes at quorum stays private to the people going.
+-- both are in-app mock events. nothing is published to facebook.
+alter table events add column if not exists visibility text not null default 'public' check (visibility in ('public', 'private'));
+update events set visibility = 'private' where plan_id is not null;
 
 -- a pick muse made that the starter chose not to ask, kept with muse's reason and ask so
 -- putting them back restores exactly what muse wrote. drafts only, never seen by the friend.
@@ -27,7 +26,7 @@ insert into public_events (id, title, description, when_day, when_time, when_tex
 values ('twilight-golf', 'Twilight Nine Holes', 'Nine holes at the public course after work. Clubs to borrow at the shop, no handicap needed, and nobody keeps score past the third hole.', 'thu', '17:30', 'thursday at 5:30', 'Candler Park', '{golf,sports,social}', 'Candler Park Golf Course', 16, null, null, 9)
 on conflict (id) do nothing;
 
--- the demo reset also forgets skipped picks and saved event drafts.
+-- the demo reset also forgets skipped picks.
 create or replace function reset_all()
 returns void
 language plpgsql
@@ -44,7 +43,7 @@ begin
     messages, threads, events, posts,
     reels_topics, friendships, users
   restart identity cascade;
-  delete from muse_cache where job like 'poster\_%' or job like 'suggest\_%' or job like 'event\_draft\_%';
+  delete from muse_cache where job like 'poster\_%' or job like 'suggest\_%';
 end;
 $$;
 revoke execute on function reset_all() from public, anon, authenticated;

@@ -1,5 +1,6 @@
 import { serverDb } from "@/lib/db/server";
 import { PlanError } from "@/lib/plans";
+import { matchesFriend } from "@/lib/friends";
 import { addableIds, parseAudience, quorumFor } from "@/lib/signals";
 import type { Person } from "@/lib/types";
 
@@ -43,7 +44,7 @@ async function allowedFriends(starterId: string, museId: string | null): Promise
 }
 
 /** the friends the starter could still add to this draft, for the search in the draft editor */
-export async function addablePeople(planId: string, starterId: string): Promise<Array<Person & { interests: string[] }>> {
+export async function addablePeople(planId: string, starterId: string, query = ""): Promise<Array<Person & { interests: string[] }>> {
   const db = serverDb();
   const plan = await draftOf(planId, starterId);
   const [ids, { data: members }] = await Promise.all([allowedFriends(starterId, plan.muse_id), db.from("plan_members").select("user_id").eq("plan_id", planId)]);
@@ -52,7 +53,7 @@ export async function addablePeople(planId: string, starterId: string): Promise<
   if (open.length === 0) return [];
   const { data: users, error } = await db.from("users").select("id,name,avatar_seed,interests").in("id", open).order("name");
   if (error) throw new Error(`users: ${error.message}`);
-  return (users ?? []).map((u) => ({ id: u.id as string, name: u.name as string, avatar_seed: u.avatar_seed as string, interests: ((u.interests as string[] | null) ?? []).slice(0, 3) }));
+  return (users ?? []).filter((u) => matchesFriend(u as { name: string; interests: string[] | null }, query)).map((u) => ({ id: u.id as string, name: u.name as string, avatar_seed: u.avatar_seed as string, interests: ((u.interests as string[] | null) ?? []).slice(0, 3) }));
 }
 
 /**
