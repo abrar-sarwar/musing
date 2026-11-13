@@ -127,6 +127,8 @@ struct SignalComposer: View {
         guard let h = app.handoff, phase == .idle else { return }
         text = h
         context = app.handoffContext
+        // a thought that started from a reel can name the friends who liked it: keep it private unless the person chooses to share
+        if context?.kind == "reel" { audience = "muse" }
         app.handoff = nil
         app.handoffContext = nil
     }

@@ -6,8 +6,9 @@ export type ExpiryChoice = "1d" | "3d" | "1w" | "2w";
 
 const DAYS: Record<ExpiryChoice, number> = { "1d": 1, "3d": 3, "1w": 7, "2w": 14 };
 
+/** anything unrecognised stays private: a signal is only shared when the app says so */
 export function parseAudience(v: unknown): Audience {
-  return v === "mutual" || v === "muse" ? v : "friends";
+  return v === "friends" || v === "mutual" ? v : "muse";
 }
 
 export function parseWaitFor(v: unknown): number {

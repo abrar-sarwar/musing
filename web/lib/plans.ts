@@ -22,6 +22,8 @@ export class PlanError extends Error {
 }
 
 const lower = (s: string) => s.toLowerCase();
+// the reason on a member row for someone who joined from the signal rather than being picked
+const JOINED = "joined from the signal";
 const person = (u: User): Person => ({ id: u.id, name: u.name, avatar_seed: u.avatar_seed });
 
 export type Bundle = { plan: Plan; members: PlanMember[]; rawText: string | null; users: Map<string, User> };
@@ -104,9 +106,11 @@ async function buildView(b: Bundle, viewerId: string): Promise<PlanView | null> 
     completed,
     invited: members.length,
     downCount: down.length,
-    // the starter sees who muse picked and why. never who answered what.
+    // the starter sees who muse picked and why. never who answered what. someone who
+    // joined from the signal said yes by joining, so they are counted but not named here.
     picks: isStarter
       ? members
+          .filter((m) => m.reason !== JOINED)
           .map((m) => ({ user: users.get(m.user_id), reason: m.reason }))
           .filter((p): p is { user: User; reason: string | null } => Boolean(p.user))
           .map((p) => ({ user: person(p.user), reason: p.reason }))
@@ -239,11 +243,12 @@ async function signalsFor(viewerId: string, own: Muse[]): Promise<{ signals: Sig
       createdAt: m.created_at,
       expiresAt: m.expires_at ?? null,
       audience: parseAudience(m.audience),
-      waitFor: plan?.quorum ?? m.wait_for ?? QUORUM,
+      // the plan's own number only once the viewer may know there is a plan
+      waitFor: (plan && (mine || (sent && onPlan)) ? plan.quorum : null) ?? m.wait_for ?? QUORUM,
       mine,
       // a draft does not exist for anyone but its starter
       planId: plan && (mine || (sent && onPlan)) ? plan.id : null,
-      planState: plan && (mine || sent) ? plan.state : null,
+      planState: plan && (mine || (sent && onPlan)) ? plan.state : null,
       inCount: inIds.length,
       joined: !mine && (keen.includes(viewerId) || inIds.includes(viewerId)),
     };
@@ -256,6 +261,24 @@ async function signalsFor(viewerId: string, own: Muse[]): Promise<{ signals: Sig
   };
 }
 
+// a new thought replaces the last attempt: an earlier shared signal by the same person
+// that never became a plan and that nobody joined (a resend after muse's question, a
+// retry, "start over") goes back to private instead of sitting in friends' lists.
+export async function retireAbandoned(userId: string): Promise<void> {
+  const db = serverDb();
+  const since = new Date(Date.now() - 3_600_000).toISOString();
+  const { data: mine } = await db.from("muses").select("id").eq("user_id", userId).neq("audience", "muse").gte("created_at", since);
+  const ids = (mine ?? []).map((m) => m.id as string);
+  if (ids.length === 0) return;
+  const [{ data: withPlan }, { data: keen }] = await Promise.all([
+    db.from("plans").select("muse_id").in("muse_id", ids),
+    db.from("signal_interest").select("muse_id").in("muse_id", ids),
+  ]);
+  const keep = new Set([...(withPlan ?? []), ...(keen ?? [])].map((r) => r.muse_id as string));
+  const stale = ids.filter((id) => !keep.has(id));
+  if (stale.length > 0) await db.from("muses").update({ audience: "muse" }).in("id", stale);
+}
+
 // a friend taps "i'm into this". counts as a yes on the signal's plan, now or once it is sent.
 export async function joinSignal(museId: string, userId: string): Promise<{ planId: string | null; settled: Settled | null }> {
   const db = serverDb();
@@ -266,11 +289,14 @@ export async function joinSignal(museId: string, userId: string): Promise<{ plan
   // someone the signal was never shown to gets the same answer as a signal that does not exist
   if (!m || m.user_id === userId || isExpired(m.expires_at, new Date())) throw new PlanError("signal not found", 404);
   if (!canSeeSignal(parseAudience(m.audience) as Audience, await relationTo(userId, m.user_id))) throw new PlanError("signal not found", 404);
-  const plan = (await livePlans([museId])).get(museId) ?? null;
-  if (plan?.state === "faded") throw new PlanError("signal not found", 404);
-
+  // raise the hand first, then look at the plan: a send that lands in between reads this row
   const { error: e1 } = await db.from("signal_interest").upsert({ muse_id: museId, user_id: userId }, { onConflict: "muse_id,user_id", ignoreDuplicates: true });
   if (e1) throw new Error(`join: ${e1.message}`);
+  const plan = (await livePlans([museId])).get(museId) ?? null;
+  if (plan?.state === "faded") {
+    await db.from("signal_interest").delete().eq("muse_id", museId).eq("user_id", userId);
+    throw new PlanError("signal not found", 404);
+  }
   if (!plan || (plan.state !== "proposing" && plan.state !== "happening")) return { planId: null, settled: null };
   await addAsDown(plan.id, [userId]);
   if (plan.state === "happening" && plan.thread_id) await syncThreadMembers(plan.id, plan.thread_id, plan.starter_id);
@@ -291,7 +317,7 @@ async function addAsDown(planId: string, userIds: string[]): Promise<void> {
   }
   const fresh = userIds.filter((id) => !already.has(id));
   if (fresh.length > 0) {
-    const { error } = await db.from("plan_members").upsert(fresh.map((id) => ({ plan_id: planId, user_id: id, status: "down", reason: "joined from the signal" })), { onConflict: "plan_id,user_id", ignoreDuplicates: true });
+    const { error } = await db.from("plan_members").upsert(fresh.map((id) => ({ plan_id: planId, user_id: id, status: "down", reason: JOINED })), { onConflict: "plan_id,user_id", ignoreDuplicates: true });
     if (error) throw new Error(`join: ${error.message}`);
   }
 }
@@ -527,7 +553,8 @@ export async function makeItReal(planId: string): Promise<void> {
     card: { type: "plan", plan_id: planId, event_id: event.id, title: plan.activity, when: plan.when_text, where: plan.where_text, line: lower(made.announce), found },
   });
   await db.from("plans").update({ thread_id: thread.id, event_id: event.id, making_at: null, updated_at: new Date().toISOString() }).eq("id", planId);
-  await db.from("thread_pings").upsert({ thread_id: thread.id, at: new Date().toISOString() });
+  // a yes that landed while this ran is not in `going`: read the members again
+  await syncThreadMembers(planId, thread.id as string, plan.starter_id);
 
   if (settings.posters_on && made.poster_prompt) {
     // awaited: a serverless host freezes the function once this returns, and the poster would never land.

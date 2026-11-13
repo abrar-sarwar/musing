@@ -3,6 +3,7 @@ import { describeContext, validContext } from "@/lib/discover";
 import { fail, requireUser } from "@/lib/http";
 import { sseResponse } from "@/lib/muse/sse";
 import { understand } from "@/lib/muse/understand";
+import { retireAbandoned } from "@/lib/plans";
 import { getSettings } from "@/lib/settings";
 import { expiresAt, parseAudience, parseWaitFor } from "@/lib/signals";
 import { firstName } from "@/lib/time";
@@ -24,12 +25,13 @@ export async function POST(req: Request) {
     // where the thought started (a listing, an event, a group, a reel), checked against the catalog
     const context = await validContext(body.context);
     const startedFrom = await describeContext(context);
+    await retireAbandoned(user.id);
     const { data: muse, error } = await db.from("muses").insert({
       user_id: user.id,
       raw_text: text,
       context,
       // an app that sends no audience predates signals: its thoughts stay between the person and muse
-      audience: body.audience === undefined ? "muse" : parseAudience(body.audience),
+      audience: parseAudience(body.audience),
       wait_for: parseWaitFor(body.waitFor),
       expires_at: expiresAt(body.expires, new Date()),
     }).select("id").single();

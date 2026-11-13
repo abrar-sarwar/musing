@@ -11,6 +11,6 @@ export function POST(req: Request) {
     if (!text || text.length < 2) throw new PlanError("say a little more (2 to 280 characters)");
     const user = await requireUser();
     if ((await getSettings()).muse_on) throw new PlanError("muse is on. send the thought to muse instead.", 409);
-    return { ok: true, planId: await createPoll(user.id, text, { audience: body.audience === undefined ? "muse" : parseAudience(body.audience), waitFor: parseWaitFor(body.waitFor), expiresAt: expiresAt(body.expires, new Date()) }) };
+    return { ok: true, planId: await createPoll(user.id, text, { audience: parseAudience(body.audience), waitFor: parseWaitFor(body.waitFor), expiresAt: expiresAt(body.expires, new Date()) }) };
   });
 }
