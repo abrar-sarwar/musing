@@ -33,8 +33,8 @@ struct SignalComposer: View {
     /// how many friends have to be in before it's on
     @State private var waitFor = 2
     @State private var expires = "1w"
-    /// make the in-app event the moment enough people are in, or leave it for the starter to tap
-    @State private var autoEvent = true
+    /// "signal": the usual thought to plan. "event": a public in-app event anyone can see, instead
+    @State private var mode = "signal"
     @State private var context: SignalContext?
     @State private var foundLine: String?
     @FocusState private var focused: Bool
@@ -44,6 +44,7 @@ struct SignalComposer: View {
     private var canSend: Bool { trimmed.count >= 2 && !busy }
 
     private var note: String {
+        if mode == "event" { return "This becomes a public event anyone in the app can see, instead of a signal. It's an in-app mock event. Nothing is posted to Facebook." }
         if !app.settings.museOn { return "Muse is off, so this goes out as typed, to the first few friends on your list." }
         if audience == "muse" { return "Only you and muse see this. Muse drafts a plan, and nothing goes to anyone until you say so." }
         return "\(audience == "mutual" ? "Friends and their friends" : audience == "close" ? "Your close friends" : "Friends") can see this signal and join. Muse drafts the plan, and nobody is asked until you send it."
@@ -73,13 +74,14 @@ struct SignalComposer: View {
                 .overlay(RoundedRectangle(cornerRadius: UI.cardRadius).stroke(focused ? FB.blue.opacity(0.5) : FB.button, lineWidth: 1))
                 .accessibilityIdentifier("signal-text")
 
-            OptionRow(label: "Send to", options: [("close", "Close friends"), ("friends", "Friends only"), ("mutual", "Friends of friends")], selection: $audience, disabled: busy)
-            OptionRow(label: "Wait for at least", options: (1...5).map { ($0, peopleCount($0)) }, selection: $waitFor, disabled: busy)
-            OptionRow(label: "Expires after", options: [("1d", "1 day"), ("3d", "3 days"), ("1w", "1 week"), ("2w", "2 weeks")], selection: $expires, disabled: busy)
-            // without muse a plan stops at the count, so there is no event to choose about
-            if museOn { OptionRow(label: "Event when it's on", options: [(true, "Make it for me"), (false, "I'll make it")], selection: $autoEvent, disabled: busy) }
+            OptionRow(label: "Create", options: [("signal", "Create signal"), ("event", "Create event")], selection: $mode, disabled: busy)
+            if mode == "signal" {
+                OptionRow(label: "Send to", options: [("close", "Close friends"), ("friends", "Friends only"), ("mutual", "Friends of friends")], selection: $audience, disabled: busy)
+                OptionRow(label: "Wait for at least", options: (1...5).map { ($0, peopleCount($0)) }, selection: $waitFor, disabled: busy)
+                OptionRow(label: "Expires after", options: [("1d", "1 day"), ("3d", "3 days"), ("1w", "1 week"), ("2w", "2 weeks")], selection: $expires, disabled: busy)
+            }
 
-            GradientButton(label: phase == .reading ? "Muse is reading" : phase == .mixing ? (museOn ? "Finding your people" : "Sending") : "Send a signal", big: true, busy: busy, disabled: !canSend) { send() }
+            GradientButton(label: phase == .reading ? "Muse is reading" : phase == .mixing ? (mode == "event" ? "Creating the event" : museOn ? "Finding your people" : "Sending") : mode == "event" ? "Create event" : "Send a signal", big: true, busy: busy, disabled: !canSend) { send() }
             HStack(alignment: .top, spacing: 8) {
                 Image(systemName: "sparkles").font(.system(size: 14, weight: .semibold)).foregroundStyle(Muse.start)
                 Text(note).font(.system(size: 13).italic()).foregroundStyle(FB.muted).fixedSize(horizontal: false, vertical: true)
@@ -192,10 +194,18 @@ struct SignalComposer: View {
         work?.cancel()
         let thought = trimmed
         let user = app.userId
-        var body: [String: Any] = ["text": thought, "audience": audience, "waitFor": waitFor, "expires": expires, "autoEvent": autoEvent]
+        var body: [String: Any] = ["text": thought, "audience": audience, "waitFor": waitFor, "expires": expires]
         if let context { body["context"] = ["kind": context.kind, "id": context.id] }
         work = Task {
             do {
+                if mode == "event" {
+                    // a public event instead of a signal: no muse, no plan, nobody asked
+                    phase = .mixing
+                    let r: EventCreated = try await API.post("/api/events", user: user, body: ["text": thought])
+                    reset()
+                    app.push(.event(r.eventId))
+                    return
+                }
                 if !app.settings.museOn {
                     // muse off: what's left is a plain poll to the first few friends
                     phase = .mixing
@@ -514,10 +524,6 @@ struct PlanScreen: View {
         act("cancel", leaveAfter: true) { try await API.data("DELETE", "/api/plans/\(planId)", user: app.userId) }
     }
 
-    private func makeEvent(_ id: String) {
-        act("event") { try await API.data("POST", "/api/plans/\(id)/event", user: app.userId) }
-    }
-
     @ViewBuilder private func content(_ p: PlanView) -> some View {
         let starter = p.role == "starter"
         let need = max(0, p.quorum - p.downCount)
@@ -653,13 +659,7 @@ struct PlanScreen: View {
                 } else {
                     fine("Enough people said yes. Without muse there's no chat or event made for you. That part is on you.")
                 }
-                if let event = p.eventId {
-                    QuietButton(label: "See the event", fill: true) { app.push(.event(event)) }
-                } else if starter, p.museOn, p.threadId != nil {
-                    // the starter chose to make it themselves. a mock event in the app, nothing is published.
-                    QuietButton(label: busy == "event" ? "Making the event" : "Make the event", disabled: busy != nil, fill: true) { makeEvent(p.id) }
-                    fine("You chose to make the event yourself. It's a mock event in the app, seen by the people going.")
-                }
+                if let event = p.eventId { QuietButton(label: "See the event", fill: true) { app.push(.event(event)) } }
             }
 
             if starter, p.state == "faded" {

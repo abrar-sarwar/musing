@@ -14,7 +14,8 @@ struct DraftEditor: View {
     /// the friends this signal reaches who aren't on the draft yet, from the server
     @State private var people: [AddablePerson]?
     @State private var search = ""
-    @State private var adding = false
+    @State private var loadError: String?
+    @State private var adding = true
     @State private var busy: String?
     @State private var error: String?
     @State private var ask = ""
@@ -24,11 +25,10 @@ struct DraftEditor: View {
 
     private var picks: [PlanView.Pick] { plan.picks ?? [] }
     private var skipped: [PlanView.Pick] { plan.skipped ?? [] }
-    /// search by name or interest. muse's own picks that were left off are listed on their own above.
+    /// the server searches (any part of a name, or an interest). muse's own picks that were left off are listed above.
     private var addable: [AddablePerson] {
         let off = Set(skipped.map(\.user.id))
-        let q = search.trimmingCharacters(in: .whitespaces).lowercased()
-        return (people ?? []).filter { !off.contains($0.id) && (q.isEmpty || $0.name.lowercased().contains(q) || $0.interests.contains { $0.lowercased().contains(q) }) }
+        return (people ?? []).filter { !off.contains($0.id) }
     }
     private var trimmed: String { ask.trimmingCharacters(in: .whitespacesAndNewlines) }
 
@@ -80,15 +80,36 @@ struct DraftEditor: View {
             if adding {
                 Card {
                     VStack(alignment: .leading, spacing: 0) {
+                        // a scrollable row of friends to tap, then the search for anyone further down the list
+                        if !addable.isEmpty {
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 14) {
+                                    ForEach(addable) { friend in
+                                        Button { change(["add": friend.id], name: friend.id) } label: {
+                                            VStack(spacing: 4) {
+                                                Avatar(friend.person, size: 52).overlay(alignment: .bottomTrailing) {
+                                                    Image(systemName: "plus.circle.fill").font(.system(size: 18)).foregroundStyle(Muse.start).background(Circle().fill(Color.white))
+                                                }
+                                                Text(firstName(friend.name)).font(.system(size: 12, weight: .semibold)).foregroundStyle(FB.text).lineLimit(1)
+                                            }
+                                            .frame(width: 64)
+                                        }
+                                        .buttonStyle(FadePress()).disabled(busy != nil || redoing)
+                                        .accessibilityLabel("Add \(friend.name)")
+                                    }
+                                }
+                            }
+                            .padding(.bottom, 10)
+                        }
                         TextField("Search your friends", text: $search)
                             .font(.system(size: 15)).textInputAutocapitalization(.never).autocorrectionDisabled()
                             .padding(.horizontal, 12).frame(height: 38).background(FB.input, in: RoundedRectangle(cornerRadius: 8))
                             .padding(.bottom, 6)
                             .accessibilityIdentifier("draft-friend-search")
                         if addable.isEmpty {
-                            Text(people == nil ? "Loading your friends" : search.isEmpty ? "Everyone this signal reaches is already here." : "No friend matches that.").font(.system(size: 14)).foregroundStyle(FB.muted)
+                            Text(loadError ?? (people == nil ? "Loading your friends" : search.isEmpty ? "Everyone this signal reaches is already here." : "No friend matches that.")).font(.system(size: 14)).foregroundStyle(loadError == nil ? FB.muted : FB.red)
                         }
-                        ForEach(addable) { friend in
+                        ForEach(search.isEmpty ? [] : addable) { friend in
                             Button { change(["add": friend.id], name: friend.id) } label: {
                                 HStack(spacing: 10) {
                                     Avatar(friend.person, size: 34)
@@ -128,10 +149,21 @@ struct DraftEditor: View {
             }
             if let error { Text(sentenceCase(error)).font(.system(size: 14)).foregroundStyle(FB.red) }
         }
-        // refetched whenever who is asked changes, so the list never offers someone already on it
-        .task(id: "\(app.userId):\(picks.map(\.user.id).joined(separator: ","))") {
-            let list: AddableList? = try? await API.get("/api/plans/\(plan.id)/picks", user: app.userId)
-            people = list?.people ?? people ?? []
+        // refetched as the search changes and whenever who is asked changes, so the list never offers
+        // someone already on it. a failure is shown, never mistaken for "no friends match".
+        .task(id: "\(app.userId):\(search):\(picks.map(\.user.id).joined(separator: ","))") {
+            if !search.isEmpty { try? await Task.sleep(for: .milliseconds(250)) }
+            guard !Task.isCancelled else { return }
+            let q = search.trimmingCharacters(in: .whitespaces).addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+            do {
+                let list: AddableList = try await API.get("/api/plans/\(plan.id)/picks?q=\(q)", user: app.userId)
+                guard !Task.isCancelled else { return }
+                people = list.people
+                loadError = nil
+            } catch let e {
+                guard !Task.isCancelled else { return }
+                loadError = "Couldn't load your friends (\(errorText(e)))."
+            }
         }
     }
 

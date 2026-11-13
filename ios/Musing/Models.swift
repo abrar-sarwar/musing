@@ -91,8 +91,6 @@ struct PlanView: Decodable, Identifiable {
     let completed: Bool?
     /// ideas for the "what if..." box that fit this plan
     let whatIfs: [String]?
-    /// false: the starter makes the event themselves once it's on. optional so an older server still decodes.
-    let autoEvent: Bool?
     /// muse's picks the starter left off a draft, with muse's reason. starter, draft only
     let skipped: [Pick]?
 }
@@ -148,6 +146,8 @@ struct PublicEvent: Decodable, Identifiable {
     let title: String
     let description: String
     let whenText: String
+    /// sun..sat, the weekly slot. optional so an older server still decodes.
+    let whenDay: String?
     let area: String
     let organizer: String
     let capacity: Int?
@@ -335,3 +335,4 @@ struct MuseTrace: Decodable, Identifiable {
 }
 
 struct PlanIdResponse: Decodable { let planId: String }
+struct EventCreated: Decodable { let eventId: String }

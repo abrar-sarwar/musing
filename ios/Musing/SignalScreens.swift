@@ -203,24 +203,15 @@ struct PlanSummaryCard: View {
 
     var body: some View {
         let waitingOnMe = plan.role == "member" && plan.state == "proposing" && plan.me?.status == "pending"
-        Card {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 5) {
-                    if plan.state == "draft" || plan.solving { Image(systemName: "sparkles").font(.system(size: 11, weight: .bold)).foregroundStyle(Muse.text) }
-                    Text(planKicker(plan)).font(UI.kicker).tracking(0.3).foregroundStyle(plan.state == "faded" ? FB.muted : Muse.text)
-                    Spacer(minLength: 0)
-                    if waitingOnMe, !detail { Circle().fill(Muse.end).frame(width: 9, height: 9).accessibilityLabel("waiting on your answer") }
-                }
-                Text(sentenceCase(plan.activity ?? "A plan")).font(detail ? .system(size: 22, weight: .bold) : UI.cardTitle).foregroundStyle(FB.text)
-                    .fixedSize(horizontal: false, vertical: true)
-                VStack(alignment: .leading, spacing: 8) {
-                    if let when = plan.when { MetaRow(icon: "calendar", text: sentenceCase(when)) }
-                    if let place = plan.where { MetaRow(icon: "mappin.and.ellipse", text: sentenceCase(place)) }
-                    MetaRow(icon: "person.2", text: "\(plan.role == "starter" ? "You" : firstName(plan.starter.name)) + \(friendCount(plan.invited)) invited")
-                    if plan.state == "draft" || plan.state == "proposing", let left = expiresIn(plan.expiresAt) { MetaRow(icon: "hourglass", text: sentenceCase(left)) }
-                }
-                PeopleChips(plan: plan).padding(.top, 2)
-            }
+        let found = plan.opportunities?.first
+        let who = "\(plan.role == "starter" ? "You" : firstName(plan.starter.name)) + \(friendCount(plan.invited)) invited"
+        let left = plan.state == "draft" || plan.state == "proposing" ? expiresIn(plan.expiresAt).map(sentenceCase) : nil
+        // the facebook events look, like the events tab: a plan reads as the event it is becoming
+        EventStyleCard(cover: found?.cover, topic: found?.activity.first ?? plan.activity,
+                       kicker: planKicker(plan) + (waitingOnMe && !detail ? " · WAITING ON YOU" : ""),
+                       date: plan.when ?? "Date to be decided", title: sentenceCase(plan.activity ?? "A plan"),
+                       place: plan.where.map(sentenceCase), counts: [who, left].compactMap { $0 }.joined(separator: " · ")) {
+            PeopleChips(plan: plan)
         }
     }
 }
@@ -244,29 +235,42 @@ struct SignalCard: View {
 
     private var inLine: String { signal.inCount == 0 ? "" : " · \(signal.inCount) in so far" }
 
+    @State private var confirming = false
+    @State private var making = false
+
     var body: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 10) {
-                    Avatar(signal.author, size: 40)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(signal.mine ? "You" : signal.author.name).font(.system(size: 15, weight: .semibold)).foregroundStyle(FB.text)
-                        Text([timeAgo(signal.createdAt).lowercased(), expiresIn(signal.expiresAt)].compactMap { $0 }.joined(separator: " · ")).font(UI.meta).foregroundStyle(FB.muted)
-                    }
-                    Spacer(minLength: 0)
-                    if signal.mine {
-                        Menu {
-                            Button("Send it again", systemImage: "arrow.clockwise") { app.handoff = signal.text }
-                        } label: {
-                            Image(systemName: "ellipsis").font(.system(size: 15, weight: .semibold)).foregroundStyle(FB.muted).frame(width: 32, height: 32)
-                        }
-                        .accessibilityLabel("more")
+        // the facebook events look, like the events tab and plans
+        EventStyleCard(topic: signal.text, kicker: signal.mine ? "YOUR SIGNAL" : "SIGNAL FROM \(firstName(signal.author.name).uppercased())",
+                       date: [timeAgo(signal.createdAt), expiresIn(signal.expiresAt)].compactMap { $0 }.joined(separator: " · "),
+                       title: signal.text, counts: meta) {
+            VStack(spacing: 8) {
+                strip
+                if signal.mine {
+                    HStack(spacing: 8) {
+                        EventPill(icon: "calendar.badge.plus", label: "Create event", busy: making) { confirming = true }
+                        EventPill(icon: "arrow.clockwise", label: "Send again") { app.handoff = signal.text }
                     }
                 }
-                Text(signal.text).font(.system(size: 17, weight: .semibold)).foregroundStyle(FB.text).fixedSize(horizontal: false, vertical: true)
-                Text(meta).font(UI.meta).foregroundStyle(FB.muted)
-                strip
             }
+        }
+        // turning a signal public is the author's explicit choice, so it asks first
+        .confirmationDialog("Make this a public event?", isPresented: $confirming, titleVisibility: .visible) {
+            Button("Create event") { makeEvent() }
+        } message: {
+            Text("Anyone in the app will see it. It's an in-app mock event. Nothing is posted to Facebook.")
+        }
+    }
+
+    private func makeEvent() {
+        making = true
+        Task {
+            do {
+                let r: EventCreated = try await API.post("/api/events", user: app.userId, body: ["signalId": signal.id])
+                app.push(.event(r.eventId))
+            } catch let e {
+                toast(errorText(e))
+            }
+            making = false
         }
     }
 

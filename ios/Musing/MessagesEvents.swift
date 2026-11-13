@@ -9,61 +9,163 @@ func formatEventDate(_ iso: String?) -> String {
 
 private let eventQuery = "select=*,host:users!events_host_id_fkey(*)"
 
-/// a recommended public event and its line, for the "for you" list
-private struct ForYou: Identifiable {
-    let event: PublicEvent
-    let line: String
-    var id: String { event.id }
+// ---------- the facebook events look, shared by events, signals and plans ----------
+
+/// a facebook-style event card: cover, date in the accent color, title, place, counts, then
+/// actions. the events tab, signals and plans all use it so they read as one surface.
+struct EventStyleCard<Actions: View>: View {
+    var cover: String? = nil
+    var topic: String? = nil
+    /// a short line above the date, like where a plan stands
+    var kicker: String? = nil
+    let date: String
+    let title: String
+    var place: String? = nil
+    var counts: String? = nil
+    /// muse's line for this one, if any
+    var line: String? = nil
+    @ViewBuilder var actions: Actions
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            CoverArt(path: cover, topic: topic).frame(maxWidth: .infinity).aspectRatio(2, contentMode: .fit).clipped()
+            VStack(alignment: .leading, spacing: 5) {
+                if let kicker { Text(kicker).font(UI.kicker).tracking(0.3).foregroundStyle(Muse.text) }
+                Text(date.uppercased()).font(.system(size: 13, weight: .bold)).foregroundStyle(FB.red)
+                Text(title).font(.system(size: 18, weight: .bold)).foregroundStyle(FB.text).fixedSize(horizontal: false, vertical: true)
+                if let place { Text(place).font(.system(size: 14)).foregroundStyle(FB.muted).lineLimit(1) }
+                if let counts { Text(counts).font(.system(size: 13)).foregroundStyle(FB.muted).lineLimit(1) }
+                if let line {
+                    HStack(alignment: .top, spacing: 6) {
+                        Image(systemName: "sparkles").font(.system(size: 12, weight: .semibold)).foregroundStyle(Muse.start)
+                        Text(line).font(.system(size: 14)).foregroundStyle(Muse.text).fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.top, 2)
+                }
+                actions.padding(.top, 6)
+            }
+            .padding(12)
+        }
+        .background(Color.white)
+        .clipShape(RoundedRectangle(cornerRadius: UI.cardRadius))
+    }
+}
+
+/// the grey (or blue, when it is the main one) pill under an event card
+struct EventPill: View {
+    let icon: String
+    let label: String
+    var primary = false
+    var busy = false
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) { EventPillLabel(icon: icon, label: busy ? "\(label)…" : label, primary: primary) }
+            .buttonStyle(FadePress()).disabled(busy)
+    }
+}
+
+struct EventPillLabel: View {
+    let icon: String
+    let label: String
+    var primary = false
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon).font(.system(size: 14))
+            Text(label).font(.system(size: 14, weight: .semibold)).lineLimit(1)
+        }
+        .foregroundStyle(primary ? FB.blue : FB.text).frame(maxWidth: .infinity).frame(height: 36)
+        .background(primary ? FB.blueSoft : FB.input, in: RoundedRectangle(cornerRadius: 8))
+    }
 }
 
 struct EventsScreen: View {
+    enum Tab: String, CaseIterable { case forYou = "For you", local = "Local", thisWeek = "This week", yours = "Your events" }
+
     @EnvironmentObject var app: AppState
     @State private var events: [EventRow] = []
     @State private var status = "Loading…"
-    // a short list first. the whole fictional catalog is one tap away, never dumped on the screen.
-    @State private var showAll = false
+    @State private var tab = Tab.forYou
+    @State private var category: String?
     /// the public events ranked for this person by the server (the reels rule), the top few with a line
     @State private var feed: [EventPick] = []
 
-    /// the catalog in the server's order. anything the ranking doesn't know keeps its catalog place, last.
-    private var ranked: [PublicEvent] {
-        let all = app.catalog?.events ?? []
-        let rank = Dictionary(feed.enumerated().map { ($0.element.eventId, $0.offset) }, uniquingKeysWith: { a, _ in a })
-        return all.enumerated().sorted { (rank[$0.element.id] ?? feed.count + $0.offset) < (rank[$1.element.id] ?? feed.count + $1.offset) }.map(\.element)
-    }
-    private var forYou: [ForYou] {
-        feed.compactMap { pick in
-            guard let line = pick.line, let ev = app.catalog?.events.first(where: { $0.id == pick.eventId }) else { return nil }
-            return ForYou(event: ev, line: line)
+    private var lines: [String: String] { Dictionary(feed.compactMap { p in p.line.map { (p.eventId, $0) } }, uniquingKeysWith: { a, _ in a }) }
+    private var categories: [String] { Array(Set((app.catalog?.events ?? []).compactMap(\.category))).sorted() }
+
+    /// the catalog for the chosen tab and category. for you is the server's order.
+    private var shown: [PublicEvent] {
+        var all = app.catalog?.events ?? []
+        if let category { all = all.filter { $0.category == category } }
+        switch tab {
+        case .forYou:
+            let rank = Dictionary(feed.enumerated().map { ($0.element.eventId, $0.offset) }, uniquingKeysWith: { a, _ in a })
+            return all.enumerated().sorted { (rank[$0.element.id] ?? feed.count + $0.offset) < (rank[$1.element.id] ?? feed.count + $1.offset) }.map(\.element)
+        case .local: return all.filter { $0.online != true }.sorted { $0.area < $1.area }
+        case .thisWeek: return all.sorted { daysAway($0.whenDay) < daysAway($1.whenDay) }
+        case .yours: return []
         }
     }
 
     var body: some View {
         SubScreen(title: "Events") {
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 8) {
-                    if !forYou.isEmpty {
-                        Text("For you").font(.system(size: 20, weight: .bold)).foregroundStyle(FB.text).padding(.horizontal, 12).padding(.top, 12).padding(.bottom, 4)
-                        ForEach(forYou) { item in recommended(item.event, line: item.line) }
-                    }
-                    let found = ranked
-                    if !found.isEmpty {
-                        Text("Discover").font(.system(size: 20, weight: .bold)).foregroundStyle(FB.text).padding(.horizontal, 12).padding(.top, 12).padding(.bottom, 4)
-                        ForEach(showAll ? found : Array(found.prefix(8))) { ev in
-                            Button { app.push(.publicEvent(ev.id)) } label: {
-                                DiscoverRow(cover: ev.cover, topic: ev.tags?.first, title: ev.title, sub: "\(sentenceCase(ev.whenText)) · \(ev.area)", detail: "\(ev.priceText) · by \(ev.organizer) · mock event")
-                            }
-                            .buttonStyle(FadePress())
+                LazyVStack(alignment: .leading, spacing: 12) {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(Tab.allCases, id: \.self) { t in chip(t.rawValue, on: tab == t) { tab = t } }
                         }
-                        if !showAll, found.count > 8 {
-                            Button { showAll = true } label: {
-                                Text("See all \(found.count) events").font(.system(size: 15, weight: .bold)).foregroundStyle(FB.text).frame(maxWidth: .infinity).frame(height: 40)
-                                    .background(FB.button, in: RoundedRectangle(cornerRadius: 8)).padding(.horizontal, 12)
-                            }
-                            .buttonStyle(FadePress())
-                        }
+                        .padding(.horizontal, 12)
                     }
-                    Text("Your events").font(.system(size: 20, weight: .bold)).foregroundStyle(FB.text).padding(.horizontal, 12).padding(.top, 12).padding(.bottom, 4)
+                    .padding(.top, 10)
+                    if tab == .yours {
+                        yours
+                    } else {
+                        if !categories.isEmpty {
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 8) {
+                                    ForEach(categories, id: \.self) { c in chip(c, on: category == c, small: true) { category = category == c ? nil : c } }
+                                }
+                                .padding(.horizontal, 12)
+                            }
+                        }
+                        ForEach(shown) { ev in card(ev).padding(.horizontal, 12) }
+                        if shown.isEmpty { Text(app.catalog == nil ? "Loading…" : "No events here yet.").foregroundStyle(FB.muted).frame(maxWidth: .infinity).padding(24) }
+                        Text("Fictional events for this prototype.").font(.system(size: 12.5)).foregroundStyle(FB.muted).padding(.horizontal, 12)
+                    }
+                }
+                .padding(.bottom, 16)
+            }
+            .refreshable { await load() }
+            .background(FB.bg2)
+        }
+        .task(id: app.version) { await load() }
+        .onTableChange("events") { Task { await load() } }
+    }
+
+    /// one public event, facebook style, with muse's line and a way to make it a plan
+    private func card(_ ev: PublicEvent) -> some View {
+        let interested = app.isSaved("event", ev.id)
+        return EventStyleCard(cover: ev.cover, topic: ev.tags?.first, date: ev.whenText, title: ev.title,
+                              place: ev.online == true ? "Online event" : ev.area,
+                              counts: "\(ev.priceText) · by \(ev.organizer)\(ev.capacity.map { " · \($0) spots" } ?? "")",
+                              line: tab == .forYou ? lines[ev.id] : nil) {
+            VStack(spacing: 8) {
+                HStack(spacing: 8) {
+                    EventPill(icon: interested ? "star.fill" : "star", label: "Interested", primary: interested) { app.setSaved("event", ev.id, !interested) }
+                    ShareLink(item: "\(ev.title) · \(sentenceCase(ev.whenText)) · \(ev.area)") { EventPillLabel(icon: "arrowshape.turn.up.right", label: "Share") }
+                }
+                EventPill(icon: "sparkles", label: "Make it a plan", primary: true) {
+                    app.makeAMove("go to the \(ev.title.lowercased()) with friends", from: SignalContext(kind: "event", id: ev.id, title: ev.title))
+                }
+            }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture { app.push(.publicEvent(ev.id)) }
+    }
+
+    @ViewBuilder private var yours: some View {
                     ForEach(events) { ev in
                         let date = parseDate(ev.startsAt)
                         Button { app.push(.event(ev.id)) } label: {
@@ -87,34 +189,22 @@ struct EventsScreen: View {
                         .buttonStyle(FadePress())
                     }
                     if events.isEmpty { Text(status).foregroundStyle(FB.muted).frame(maxWidth: .infinity).padding(24) }
-                }
-                .padding(.bottom, 16)
-            }
-            .refreshable { await load() }
-            .background(FB.bg2)
-        }
-        .task(id: app.version) { await load() }
-        .onTableChange("events") { Task { await load() } }
     }
 
-    /// one recommended event: the row, muse's nudge, and a tap that starts a plan from it
-    private func recommended(_ ev: PublicEvent, line: String) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Button { app.push(.publicEvent(ev.id)) } label: {
-                DiscoverRow(cover: ev.cover, topic: ev.tags?.first, title: ev.title, sub: "\(sentenceCase(ev.whenText)) · \(ev.area)", detail: "\(ev.priceText) · mock event")
-            }
-            .buttonStyle(FadePress())
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(alignment: .top, spacing: 8) {
-                    Image(systemName: "sparkles").font(.system(size: 13, weight: .semibold)).foregroundStyle(Muse.start)
-                    Text(line).font(.system(size: 14)).foregroundStyle(Muse.text).fixedSize(horizontal: false, vertical: true)
-                }
-                MoveFromThis(sub: "make it a plan. muse asks the friends who are free then.") {
-                    app.makeAMove("go to the \(ev.title.lowercased()) with friends", from: SignalContext(kind: "event", id: ev.id, title: ev.title))
-                }
-            }
-            .padding(.horizontal, 12).padding(.bottom, 12).background(Color.white)
+    private func chip(_ label: String, on: Bool, small: Bool = false, _ tap: @escaping () -> Void) -> some View {
+        Button(action: tap) {
+            Text(label).font(.system(size: small ? 14 : 15, weight: .semibold)).foregroundStyle(on ? FB.blue : FB.text)
+                .padding(.horizontal, 14).frame(height: small ? 32 : 36)
+                .background(on ? FB.blueSoft : FB.input, in: Capsule())
         }
+        .buttonStyle(FadePress())
+    }
+
+    /// days from today until a weekly event's next run, for "this week"
+    private func daysAway(_ day: String?) -> Int {
+        let keys = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"]
+        guard let day, let i = keys.firstIndex(of: day) else { return 7 }
+        return (i - (Calendar.current.component(.weekday, from: Date()) - 1) + 7) % 7
     }
 
     private func load() async {
