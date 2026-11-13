@@ -64,6 +64,7 @@ struct RootView: View {
         // lock-screen and home-screen notifications for whoever this phone is
         .task(id: "\(app.userId)-\(app.needsAccount)") {
             guard !app.needsAccount else { return }
+            Task { await MusePictures.shared.ensure(user: app.userId) }
             await Notifier.shared.watch(user: app.userId)
             if let link = Notifier.shared.takePendingLink() { open(link) }
         }

@@ -51,6 +51,7 @@ verified current behavior: the api server runs on vercel at `https://musing-six.
 - vercel deployment protection covers preview deployments only; the production address is public so phones can reach it.
 
 - **reel clips:** the four real clips are not in git (they are other creators' videos). they are in a private storage bucket, `reel-videos`, on the hosted database. a build that does not have the files bundled asks `GET /api/reels/videos` for signed links (six hours, demo sign-in required) and streams them. `cd web && pnpm reels:upload` puts the files from `ios/Musing/Resources/mock/reelvideo/` there again. a local stack runs without storage, so against a local server only a mac that has the files plays them and everyone else sees the stills.
+- **muse pictures:** the seven plush pictures are not in git either (supplied artwork). they are in a second private bucket, `muse-pictures`. a build without the files asks `GET /api/muse/pictures` once after sign-in (signed links, one hour, demo sign-in required), saves the pictures on the phone and keeps them; until they arrive, or against a local stack, muse is the drawn stand-in. `cd web && pnpm muse:upload` puts the files from `ios/Musing/Resources/mock/muse/` there again.
 
 ## running it on your own mac and phone (teammates)
 

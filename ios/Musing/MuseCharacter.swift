@@ -46,6 +46,8 @@ struct MuseFace: View {
     var size: CGFloat = 96
     /// eyes shut for a moment. ignored when they are already closed.
     var blink = false
+    /// the same pictures fetched from the server, for a build without the files
+    @ObservedObject private var fetched = MusePictures.shared
 
     /// the picture of muse for this expression, cut from the real plush (bundled under mock/muse)
     private var picture: UIImage? {
@@ -58,7 +60,7 @@ struct MuseFace: View {
         case .sad: name = blink ? "blink" : "sad"
         case .awake: name = blink ? "blink" : "awake"
         }
-        return MockImages.load("muse/\(name).png")
+        return MockImages.load("muse/\(name).png") ?? fetched.images[name]
     }
 
     var body: some View {
