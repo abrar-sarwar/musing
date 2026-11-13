@@ -396,6 +396,8 @@ struct MusingScreen: View {
     @State private var joining: String?
     @State private var allMine = false
     @StateObject private var mood = MuseMood()
+    /// "Upcoming plans" narrowed to one status. nil shows them all.
+    @State private var planFilter: PlanLook?
 
     init(compose: Bool, tab: MusingTab = .send) {
         self.compose = compose
@@ -487,9 +489,26 @@ struct MusingScreen: View {
         let all = plans
         let upcoming = all.filter { $0.completed != true }
         let done = all.filter { $0.completed == true }
-        SectionTitle("Upcoming plans")
+        let shown = upcoming.filter { p in planFilter.map { PlanLook.of(p, user: app.userId) == $0 } ?? true }
+        HStack(alignment: .firstTextBaseline) {
+            SectionTitle("Upcoming plans")
+            Menu {
+                Picker("Show", selection: $planFilter) {
+                    Text("All plans").tag(PlanLook?.none)
+                    ForEach([PlanLook.confirmed, .updated, .draft, .sent], id: \.self) { look in Text(look.name).tag(PlanLook?.some(look)) }
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Text(planFilter?.name ?? "All plans").font(.system(size: 14, weight: .semibold))
+                    Image(systemName: "chevron.down").font(.system(size: 11, weight: .semibold))
+                }
+                .foregroundStyle(FB.blue).fixedSize()
+            }
+            .accessibilityLabel("Filter plans: \(planFilter?.name ?? "All plans")")
+        }
         if upcoming.isEmpty { EmptyNote(note("No plans yet. Send a signal and muse drafts one.")) }
-        ForEach(upcoming) { p in planButton(p) }
+        else if shown.isEmpty, let planFilter { EmptyNote("No \(planFilter.name.lowercased()) plans right now.") }
+        ForEach(shown) { p in planButton(p) }
         SectionTitle("Completed plans").padding(.top, 12)
         if done.isEmpty { EmptyNote(note("Plans that happened show up here.")) }
         ForEach(done) { p in planButton(p) }
@@ -499,8 +518,8 @@ struct MusingScreen: View {
         Button { app.push(.plan(p.id)) } label: { PlanSummaryCard(plan: p, eventAction: true) }.buttonStyle(FadePress())
     }
 
-    /// updated plans first, then drafts, then everything else. each group soonest first; a plan
-    /// with no day yet goes after the ones that have one, and plans that faded go last.
+    /// confirmed plans first, then updated, then drafts, then everything else. each group soonest
+    /// first; a plan with no day yet goes after the ones that have one, and plans that faded go last.
     private var plans: [PlanView] {
         var seen = Set<String>()
         let all = ((home?.asks ?? []) + (home?.mine ?? [])).filter { seen.insert($0.id).inserted }
@@ -508,10 +527,11 @@ struct MusingScreen: View {
         let now = Date()
         func group(_ p: PlanView) -> Int {
             switch PlanLook.of(p, user: user) {
-            case .updated: 0
-            case .draft: 1
-            case .past: p.state == "faded" ? 3 : 2
-            default: 2
+            case .confirmed: 0
+            case .updated: 1
+            case .draft: 2
+            case .sent: 3
+            case .past: p.state == "faded" ? 5 : 4
             }
         }
         return all.enumerated().sorted { a, b in
