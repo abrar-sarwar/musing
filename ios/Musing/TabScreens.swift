@@ -1,4 +1,5 @@
 import SwiftUI
+import AVFoundation
 
 // ---------- reels ----------
 
@@ -9,6 +10,17 @@ struct Reel: Identifiable, Hashable {
     let caption: String
     let headline: String
     let poster: String
+    /// a real clip bundled with the app, and the thought it hands to muse
+    var video: URL? = nil
+    var pitch: String? = nil
+}
+
+/// who liked a topic's reel. the screen only ever names opted-in friends.
+struct ReelLikeRow: Decodable {
+    struct Liker: Decodable { let id: String; let name: String; let avatarSeed: String; let reelsOptIn: Bool }
+    let userId: String
+    let topic: String
+    let user: Liker
 }
 
 struct ReelsScreen: View {
@@ -16,14 +28,34 @@ struct ReelsScreen: View {
     @State private var rows: [ReelRow] = []
     @State private var overlap: Overlap?
     @State private var status = "Loading…"
-    @State private var current: String?
+    // launch with `-reel video:band` to open on that reel (screenshots, demos)
+    @State private var current: String? = UserDefaults.standard.string(forKey: "reel")
     @State private var liked: Set<String> = []
     @State private var saved: Set<String> = []
     @State private var dismissed = false
+    @State private var likeRows: [ReelLikeRow] = []
+    @State private var friendIds: Set<String> = []
+    @State private var dismissedLikes: Set<String> = []
+    @State private var muted = false
+    @Environment(\.scenePhase) private var scenePhase
+
+    /// friends of the viewer who liked this topic's reel and share their reels activity
+    private func likers(_ topic: String) -> [Person] {
+        var seen = Set<String>()
+        return likeRows
+            .filter { $0.topic == topic && $0.userId != app.userId && friendIds.contains($0.userId) && $0.user.reelsOptIn && seen.insert($0.userId).inserted }
+            .map { Person(id: $0.user.id, name: $0.user.name, avatarSeed: $0.user.avatarSeed) }
+    }
 
     private var reels: [Reel] {
         // one reel per topic so every reel has its own media; other people's reels only
-        var seen = Set<String>()
+        let videos = Mock.videoReels.compactMap { v -> Reel? in
+            guard let url = v.url else { return nil }
+            let creator = User(id: "creator:\(v.creator)", name: v.creator, avatarSeed: v.creator, bio: nil, interests: [])
+            return Reel(id: "video:\(v.file)", topic: v.topic, user: creator, caption: v.caption, headline: "", poster: "reelvideo/\(v.file).jpg", video: url, pitch: v.pitch)
+        }
+        // a topic with a real clip does not also get a still
+        var seen = Set(videos.map(\.topic))
         var out: [Reel] = []
         for r in rows where r.userId != app.userId && !seen.contains(r.topic) {
             seen.insert(r.topic)
@@ -34,7 +66,9 @@ struct ReelsScreen: View {
         if let t = overlap?.topic, let i = out.firstIndex(where: { $0.topic == t }), i != 1, out.count > 2 {
             out.insert(out.remove(at: i), at: 1)
         }
-        return Array(out.prefix(14))
+        // the clips come right after one neutral still
+        out.insert(contentsOf: videos, at: min(1, out.count))
+        return Array(out.prefix(14 + videos.count))
     }
 
     var body: some View {
@@ -73,9 +107,16 @@ struct ReelsScreen: View {
             // the count comes from sql on the server: opted-in friends only, null below 3.
             async let o: OverlapResponse? = try? API.get("/api/overlap", user: app.userId)
             let r: [ReelRow] = try await Supa.select("reels_topics", "select=*,user:users!reels_topics_user_id_fkey(*)&order=score.desc&limit=40")
+            let topics = Mock.videoReels.map { "\"\($0.topic)\"" }.joined(separator: ",")
+            async let l: [ReelLikeRow]? = try? Supa.select("reels_topics", "select=user_id,topic,user:users!reels_topics_user_id_fkey(id,name,avatar_seed,reels_opt_in)&topic=in.(\(topics))&order=score.desc")
+            async let f: [FriendEdge]? = try? Supa.select("friendships", "select=friend_id&user_id=eq.\(app.userId)")
             let ov = await o
+            let (likes, friends) = await (l, f)
             guard !Task.isCancelled else { return }
             rows = r
+            likeRows = likes ?? []
+            friendIds = Set((friends ?? []).map(\.friendId))
+            dismissedLikes = []
             overlap = ov?.overlap
             status = "No reels yet."
         } catch let e {
@@ -85,9 +126,16 @@ struct ReelsScreen: View {
     }
 
     private func page(_ item: Reel, isCurrent: Bool) -> some View {
-        let likes = 900 + stableHash(item.id) % 140000
+        let friends = item.video == nil ? [] : likers(item.topic)
+        let likes = 900 + stableHash(item.id) % 140000 + friends.count
         return ZStack {
             Pic(path: item.poster)
+            if let url = item.video {
+                ReelVideo(url: url, playing: isCurrent && app.tab == .reels && scenePhase == .active, muted: muted)
+                    .contentShape(Rectangle())
+                    .onTapGesture { muted.toggle() }
+                    .accessibilityLabel(muted ? "Unmute" : "Mute")
+            }
             LinearGradient(stops: [.init(color: .black.opacity(0.75), location: 0), .init(color: .black.opacity(0.05), location: 0.3), .init(color: .black.opacity(0.9), location: 1)], startPoint: .top, endPoint: .bottom)
             VStack(spacing: 0) {
                 Text(item.headline).font(.system(size: 19, weight: .semibold)).italic().foregroundStyle(.white).multilineTextAlignment(.center)
@@ -95,7 +143,9 @@ struct ReelsScreen: View {
                 Spacer()
                 HStack(alignment: .bottom, spacing: 12) {
                     VStack(alignment: .leading, spacing: 0) {
-                        if let overlap, item.topic == overlap.topic, isCurrent, !dismissed {
+                        if !friends.isEmpty, isCurrent, !dismissedLikes.contains(item.id) {
+                            FriendsLikedCard(friends: friends, reel: item) { dismissedLikes.insert(item.id) }
+                        } else if friends.isEmpty, let overlap, item.topic == overlap.topic, isCurrent, !dismissed {
                             OverlapCard(overlap: overlap) { dismissed = true }
                         }
                         HStack(spacing: 10) {
@@ -107,7 +157,7 @@ struct ReelsScreen: View {
                                 }
                                 HStack(spacing: 5) {
                                     Image(systemName: "music.note").font(.system(size: 12))
-                                    Text("\(firstName(item.user.name)) · Original audio").font(.system(size: 13.5)).lineLimit(1)
+                                    Text(item.video == nil ? "\(firstName(item.user.name)) · Original audio" : (muted ? "Muted · tap for sound" : "Original audio")).font(.system(size: 13.5)).lineLimit(1)
                                 }
                             }
                         }
@@ -138,6 +188,95 @@ struct ReelsScreen: View {
             .foregroundStyle(.white).frame(minWidth: 44)
         }
         .buttonStyle(FadePress()).accessibilityLabel(name)
+    }
+}
+
+// a real clip, looping, filling the page. it only plays on the page being looked at.
+struct ReelVideo: UIViewRepresentable {
+    let url: URL
+    let playing: Bool
+    let muted: Bool
+
+    final class PlayerView: UIView {
+        override class var layerClass: AnyClass { AVPlayerLayer.self }
+        var playerLayer: AVPlayerLayer { layer as! AVPlayerLayer }
+        let player = AVQueuePlayer()
+        var looper: AVPlayerLooper?
+    }
+
+    func makeUIView(context: Context) -> PlayerView {
+        let v = PlayerView()
+        v.looper = AVPlayerLooper(player: v.player, templateItem: AVPlayerItem(url: url))
+        v.playerLayer.player = v.player
+        v.playerLayer.videoGravity = .resizeAspectFill
+        v.backgroundColor = .clear
+        return v
+    }
+
+    func updateUIView(_ v: PlayerView, context: Context) {
+        v.player.isMuted = muted
+        if playing { v.player.play() } else { v.player.pause() }
+    }
+
+    static func dismantleUIView(_ v: PlayerView, coordinator: ()) {
+        v.player.pause()
+        v.looper = nil
+    }
+}
+
+// friends who liked this reel, by name, and one tap to turn it into a plan with them.
+// only opted-in friends are ever named.
+struct FriendsLikedCard: View {
+    @EnvironmentObject var app: AppState
+    let friends: [Person]
+    let reel: Reel
+    let onDismiss: () -> Void
+    @State private var shown = false
+
+    private var names: [String] { friends.map { firstName($0.name) } }
+    private var line: String {
+        switch names.count {
+        case 1: return "\(names[0]) liked this"
+        case 2: return "\(names[0]) and \(names[1]) liked this"
+        case 3: return "\(names[0]), \(names[1]) and \(names[2]) liked this"
+        default: return "\(names[0]), \(names[1]) and \(names.count - 2) other friends liked this"
+        }
+    }
+    private var crew: String {
+        let n = names.prefix(3).map { $0.lowercased() }
+        return n.count < 2 ? n.joined() : n.dropLast().joined(separator: ", ") + " and " + n[n.count - 1]
+    }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            HStack(spacing: -10) {
+                ForEach(friends.prefix(3)) { f in
+                    Avatar(f, size: 32).overlay(Circle().stroke(Color(hex: 0xfaf7ff), lineWidth: 2))
+                }
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(line).font(.system(size: 14.5, weight: .semibold)).foregroundStyle(Color(hex: 0x1c1e21)).lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                Button {
+                    onDismiss()
+                    app.makeAMove("\(reel.pitch ?? "this could be us: \(reel.topic)") with \(crew)", from: SignalContext(kind: "reel", id: reel.topic, title: "a reel about \(reel.topic)"))
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "sparkles").font(.system(size: 12, weight: .bold))
+                        Text("this could be us").font(.system(size: 14.5, weight: .bold))
+                    }
+                    .foregroundStyle(Muse.text)
+                }
+                .accessibilityIdentifier("reel-could-be-us")
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Button(action: onDismiss) { Image(systemName: "xmark").font(.system(size: 13, weight: .semibold)).foregroundStyle(Color(hex: 0x6b6b70)).frame(width: 28, height: 28) }
+                .accessibilityLabel("dismiss")
+        }
+        .padding(.vertical, 10).padding(.horizontal, 12)
+        .background(Color(hex: 0xfaf7ff, alpha: 0.96), in: RoundedRectangle(cornerRadius: 16))
+        .padding(.bottom, 12)
+        .opacity(shown ? 1 : 0).offset(y: shown ? 0 : 30)
+        .onAppear { withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.5)) { shown = true } }
     }
 }
 

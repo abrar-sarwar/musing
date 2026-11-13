@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# other creators' reels used in the local demo only. never committed (this repo is public).
+ios/Musing/Resources/mock/reelvideo/

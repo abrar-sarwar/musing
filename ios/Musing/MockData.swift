@@ -164,6 +164,27 @@ enum Mock {
         "bookstores": ("Left with six books", "came in for one"),
         "cycling": ("40k before breakfast", "legs are a rumor now"),
     ]
+    // real clips for the demo. the files live in Resources/mock/reelvideo, which is not in
+    // git (they are other creators' videos), so a build without them shows stills instead.
+    struct VideoReel {
+        let file: String
+        let topic: String
+        let creator: String
+        let caption: String
+        let pitch: String
+        var url: URL? {
+            guard let base = Bundle.main.resourcePath else { return nil }
+            let path = "\(base)/mock/reelvideo/\(file).mp4"
+            return FileManager.default.fileExists(atPath: path) ? URL(fileURLWithPath: path) : nil
+        }
+    }
+    static let videoReels: [VideoReel] = [
+        VideoReel(file: "thriftflip", topic: "thrifting", creator: "cherri.bb", caption: "thrift flip with me: an oversized shirt becomes a qipao-inspired top", pitch: "this could be us: a thrift flip day, find a shirt and remake it"),
+        VideoReel(file: "cafeshoot", topic: "cafe photoshoots", creator: "ovng", caption: "when your client thinks differently", pitch: "this could be us: a cafe photoshoot, coffee and turns behind the camera"),
+        VideoReel(file: "band", topic: "starting a band", creator: "cj.sendz", caption: "day 2 of starting a band. only up from here", pitch: "this could be us: starting a band, first jam session"),
+        VideoReel(file: "vintagepopup", topic: "vintage popups", creator: "thriftshit.us", caption: "vintage and secondhand pop-up shop", pitch: "this could be us: hitting a vintage pop-up"),
+    ]
+
     static func describeReel(_ topic: String) -> (headline: String, caption: String) {
         reelCaptions[topic] ?? ("\(topic.prefix(1).uppercased())\(topic.dropFirst()), but make it a weekend", "\(topic) again. no notes.")
     }
