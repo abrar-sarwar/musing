@@ -27,7 +27,8 @@ struct SignalComposer: View {
     @State private var replayed = false
     @State private var error: String?
     @State private var work: Task<Void, Never>?
-    /// who the signal is shown to: "friends", "mutual" (friends of friends) or "muse" (nobody)
+    /// who the signal is shown to: "close" (close friends), "friends" or "mutual" (friends of friends).
+    /// every signal is an invite to someone; "only muse" is no longer a choice.
     @State private var audience = "friends"
     /// how many friends have to be in before it's on
     @State private var waitFor = 2
@@ -43,7 +44,7 @@ struct SignalComposer: View {
     private var note: String {
         if !app.settings.museOn { return "Muse is off, so this goes out as typed, to the first few friends on your list." }
         if audience == "muse" { return "Only you and muse see this. Muse drafts a plan, and nothing goes to anyone until you say so." }
-        return "\(audience == "mutual" ? "Friends and their friends" : "Friends") can see this signal and join. Muse drafts the plan, and nobody is asked until you send it."
+        return "\(audience == "mutual" ? "Friends and their friends" : audience == "close" ? "Your close friends" : "Friends") can see this signal and join. Muse drafts the plan, and nobody is asked until you send it."
     }
 
     var body: some View {
@@ -70,7 +71,7 @@ struct SignalComposer: View {
                 .overlay(RoundedRectangle(cornerRadius: UI.cardRadius).stroke(focused ? FB.blue.opacity(0.5) : FB.button, lineWidth: 1))
                 .accessibilityIdentifier("signal-text")
 
-            OptionRow(label: "Send to", options: [("friends", "Friends only"), ("mutual", "Friends of friends"), ("muse", "Only muse")], selection: $audience, disabled: busy)
+            OptionRow(label: "Send to", options: [("close", "Close friends"), ("friends", "Friends only"), ("mutual", "Friends of friends")], selection: $audience, disabled: busy)
             OptionRow(label: "Wait for at least", options: (1...5).map { ($0, peopleCount($0)) }, selection: $waitFor, disabled: busy)
             OptionRow(label: "Expires after", options: [("1d", "1 day"), ("3d", "3 days"), ("1w", "1 week"), ("2w", "2 weeks")], selection: $expires, disabled: busy)
 
@@ -127,8 +128,7 @@ struct SignalComposer: View {
         guard let h = app.handoff, phase == .idle else { return }
         text = h
         context = app.handoffContext
-        // a thought that started from a reel can name the friends who liked it: keep it private unless the person chooses to share
-        if context?.kind == "reel" { audience = "muse" }
+        // a thought from a reel is an open invite like any other. the text is there to edit before it goes out.
         app.handoff = nil
         app.handoffContext = nil
     }
@@ -332,6 +332,8 @@ struct WhatIf: View {
     @EnvironmentObject var app: AppState
     let planId: String
     let existingLimit: String?
+    /// two or three changes that fit this plan. tapping one fills the box, it does not send.
+    var suggestions: [String] = []
     let onDone: () -> Void
     let onClose: () -> Void
     @State private var offer = ""
@@ -340,9 +342,10 @@ struct WhatIf: View {
     @State private var stream = ""
     @State private var error: String?
 
-    init(planId: String, existingLimit: String?, onDone: @escaping () -> Void, onClose: @escaping () -> Void) {
+    init(planId: String, existingLimit: String?, suggestions: [String] = [], onDone: @escaping () -> Void, onClose: @escaping () -> Void) {
         self.planId = planId
         self.existingLimit = existingLimit
+        self.suggestions = suggestions
         self.onDone = onDone
         self.onClose = onClose
         _limit = State(initialValue: existingLimit ?? "")
@@ -356,6 +359,21 @@ struct WhatIf: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(Copy.whatIf).font(.system(size: 14, weight: .bold)).foregroundStyle(FB.text)
             field("Sunday instead? Somewhere closer?", $offer, FB.input)
+            if !suggestions.isEmpty {
+                // stacked, not wrapped: each idea is a full sentence
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(suggestions, id: \.self) { s in
+                        let on = offer == s
+                        Button { offer = on ? "" : s } label: {
+                            Text(s).font(.system(size: 13.5, weight: .semibold)).foregroundStyle(on ? Color.white : FB.blue).multilineTextAlignment(.leading)
+                                .padding(.horizontal, 12).padding(.vertical, 8)
+                                .background(on ? FB.blue : FB.blueSoft, in: RoundedRectangle(cornerRadius: UI.buttonRadius))
+                        }
+                        .buttonStyle(FadePress()).disabled(busy)
+                    }
+                }
+                .accessibilityLabel("ideas that fit this plan")
+            }
             HStack(spacing: 5) {
                 Image(systemName: "lock.fill").font(.system(size: 11)).foregroundStyle(Muse.text)
                 Text(Copy.privateLimit).font(.system(size: 14, weight: .bold)).foregroundStyle(Muse.text)
@@ -419,7 +437,8 @@ struct PlanScreen: View {
     @State private var loading = true
     @State private var busy: String?
     @State private var error: String?
-    @State private var whatIfOpen = false
+    // `-whatif YES` as a launch argument opens the box straight away, for screenshots
+    @State private var whatIfOpen = UserDefaults.standard.bool(forKey: "whatif")
     @State private var matchedOpen = true
 
     var body: some View {
@@ -600,7 +619,7 @@ struct PlanScreen: View {
 
             if open, whatIfOpen {
                 Card {
-                    WhatIf(planId: p.id, existingLimit: p.me?.privateLimit, onDone: {
+                    WhatIf(planId: p.id, existingLimit: p.me?.privateLimit, suggestions: p.whatIfs ?? [], onDone: {
                         Task {
                             await load()
                             whatIfOpen = false

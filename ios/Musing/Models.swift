@@ -89,6 +89,8 @@ struct PlanView: Decodable, Identifiable {
     // optional so an older server still decodes.
     let expiresAt: String?
     let completed: Bool?
+    /// ideas for the "what if..." box that fit this plan
+    let whatIfs: [String]?
 }
 
 // one signal, shaped for one viewer. who is in is only ever a count.
@@ -98,7 +100,7 @@ struct SignalView: Decodable, Identifiable {
     let text: String
     let createdAt: String
     let expiresAt: String?
-    let audience: String // friends | mutual | muse
+    let audience: String // close | friends | mutual | muse (private, not a choice in the composer)
     let waitFor: Int
     let mine: Bool
     let planId: String?

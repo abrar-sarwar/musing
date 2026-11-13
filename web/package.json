@@ -13,6 +13,7 @@
     "test:leak": "node --import tsx scripts/leak.test.ts",
     "test:router": "node --import tsx scripts/router.test.ts",
     "test:discover": "node --import tsx scripts/discover.test.ts",
+    "reels:upload": "node --env-file=.env.hosted.local --import tsx scripts/upload-reels.ts",
     "test:signals": "node --import tsx scripts/signals.test.ts",
     "test:whatif": "node --import tsx scripts/whatif.test.ts",
     "eval:muse": "node --env-file=.env.local --import tsx scripts/muse-eval.ts"
