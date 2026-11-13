@@ -117,7 +117,11 @@ struct MuseCompanion: View {
         case .asking: return .waiting
         case .idle: break
         }
-        guard let plan else { return .musing }
+        guard let plan else {
+            // the draft exists but is still being fetched to show: muse is not done yet, so it does not nod off
+            if let id = mood.freshPlanId, !dismissed.contains(id) { return .mewing }
+            return .musing
+        }
         return plan.state == "proposing" ? .waiting : .mewed
     }
 
@@ -347,9 +351,15 @@ struct MuseCompanion: View {
     private func loadFresh() async {
         guard let id = mood.freshPlanId else { return }
         let user = app.userId
-        let p: PlanView? = try? await API.get("/api/plans/\(id)", user: user)
+        var p: PlanView? = try? await API.get("/api/plans/\(id)", user: user)
+        // one more try before giving up, so a blip does not leave muse musing forever
+        if p == nil, !Task.isCancelled {
+            try? await Task.sleep(for: .seconds(1))
+            p = try? await API.get("/api/plans/\(id)", user: user)
+        }
         guard user == app.userId, !Task.isCancelled else { return }
         freshPlan = p
+        if p == nil, mood.freshPlanId == id { mood.freshPlanId = nil }
     }
 
     /// a compact preview of the real plan. a draft says so: nothing has gone to anyone yet.

@@ -84,7 +84,7 @@ enum API {
         req.httpMethod = method
         req.setValue(user, forHTTPHeaderField: "x-musing-user")
         // a deployed server does not believe the header above. it wants the signed demo token.
-        if let token = tokens[user] { req.setValue(token, forHTTPHeaderField: "x-musing-token") }
+        if let token = token(for: user) { req.setValue(token, forHTTPHeaderField: "x-musing-token") }
         if !Config.adminToken.isEmpty { req.setValue(Config.adminToken, forHTTPHeaderField: "x-admin-token") }
         if let body {
             req.setValue("application/json", forHTTPHeaderField: "content-type")
@@ -99,17 +99,30 @@ enum API {
         return ApiError(message: text.isEmpty || text.count > 200 ? "http \(status)" : text)
     }
 
-    private static var tokens: [String: String] = [:]
+    // several screens sign in at the same moment on launch, from different threads. the
+    // store is only ever touched under this lock: unguarded, two writes at once crash the app.
+    private static var tokenStore: [String: String] = [:]
+    private static let tokenLock = NSLock()
+    private static func token(for user: String) -> String? {
+        tokenLock.lock()
+        defer { tokenLock.unlock() }
+        return tokenStore[user]
+    }
+    private static func setToken(_ token: String, for user: String) {
+        tokenLock.lock()
+        defer { tokenLock.unlock() }
+        tokenStore[user] = token
+    }
 
     /// on a deployed server, trade the demo passcode for a signed token for this person. local servers skip this.
     static func signIn(_ user: String) async {
-        guard !Config.demoPasscode.isEmpty, tokens[user] == nil else { return }
+        guard !Config.demoPasscode.isEmpty, token(for: user) == nil else { return }
         var req = URLRequest(url: URL(string: Config.apiURL + "/api/session")!)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "content-type")
         req.httpBody = try? JSONSerialization.data(withJSONObject: ["userId": user, "passcode": Config.demoPasscode])
         guard let (data, _) = try? await URLSession.shared.data(for: req), let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any], let token = obj["token"] as? String else { return }
-        tokens[user] = token
+        setToken(token, for: user)
     }
 
     @discardableResult
