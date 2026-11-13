@@ -385,19 +385,23 @@ struct WhatIf: View {
         let l = limit.trimmingCharacters(in: .whitespacesAndNewlines)
         let limitChanged = l != (existingLimit ?? "")
         let canSend = !busy && (o.count > 1 || (limitChanged && l.count > 1))
-        VStack(alignment: .leading, spacing: 8) {
-            Text(Copy.whatIf).font(.system(size: 22, weight: .bold)).foregroundStyle(FB.text)
-            Text("Suggest any changes or preferences. Muse adjusts the plan and re-confirms with everyone.").font(UI.meta).foregroundStyle(FB.muted).fixedSize(horizontal: false, vertical: true).padding(.bottom, 4)
-            field("Sunday instead? Somewhere closer?", $offer, FB.input)
+        VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(Copy.whatIf).font(.system(size: 20, weight: .bold)).foregroundStyle(FB.text)
+                Text("Suggest any changes or preferences, anonymously. Muse will adjust the plan and re-confirm with everyone.").font(UI.meta).foregroundStyle(FB.muted).fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.bottom, 2)
+            field("Sunday instead? Somewhere closer?", $offer, lines: 3...5)
             if !suggestions.isEmpty {
                 // stacked, not wrapped: each idea is a full sentence
                 VStack(alignment: .leading, spacing: 6) {
                     ForEach(suggestions, id: \.self) { s in
                         let on = offer == s
                         Button { offer = on ? "" : s } label: {
-                            Text(s).font(.system(size: 13.5, weight: .semibold)).foregroundStyle(on ? Color.white : FB.blue).multilineTextAlignment(.leading)
+                            // the same chip as everywhere else: grey until chosen, soft blue once it is
+                            Text(s).font(.system(size: 13.5, weight: .semibold)).foregroundStyle(on ? FB.blue : FB.muted).multilineTextAlignment(.leading)
                                 .padding(.horizontal, 12).padding(.vertical, 8)
-                                .background(on ? FB.blue : FB.blueSoft, in: RoundedRectangle(cornerRadius: UI.buttonRadius))
+                                .background(on ? FB.blueSoft : FB.button, in: RoundedRectangle(cornerRadius: UI.buttonRadius))
                         }
                         .buttonStyle(FadePress()).disabled(busy)
                     }
@@ -405,12 +409,12 @@ struct WhatIf: View {
                 .accessibilityLabel("ideas that fit this plan")
             }
             HStack(spacing: 5) {
-                Image(systemName: "lock.fill").font(.system(size: 11)).foregroundStyle(Muse.text)
-                Text(Copy.privateLimit).font(.system(size: 14, weight: .bold)).foregroundStyle(Muse.text)
+                Image(systemName: "lock.fill").font(.system(size: 11)).foregroundStyle(FB.text)
+                Text(Copy.privateLimit).font(.system(size: 14, weight: .bold)).foregroundStyle(FB.text)
             }
-            .padding(.top, 6)
-            field("Anything muse should quietly work around", $limit, Muse.soft)
-            Text(Copy.privateNote).font(.system(size: 12)).foregroundStyle(FB.muted)
+            .padding(.top, 4)
+            field("Anything muse should quietly work around", $limit, lines: 1...3)
+            Text(Copy.privateNote).font(.system(size: 12)).foregroundStyle(FB.muted).fixedSize(horizontal: false, vertical: true)
 
             if busy || !stream.isEmpty { MuseBubble(text: stream, thinking: busy, label: busy ? Copy.solving : nil) }
             if let error { Text("muse couldn't rework it (\(error)). the plan stays as it was.").font(.system(size: 14)).foregroundStyle(FB.red) }
@@ -418,15 +422,18 @@ struct WhatIf: View {
             GradientButton(label: busy ? "Reworking" : "Ask Muse privately", big: true, busy: busy, disabled: !canSend) {
                 Task { await send(offer: o, limit: limitChanged ? l : nil) }
             }
-            .padding(.top, 6)
+            .padding(.top, 4)
             QuietButton(label: "Never mind", disabled: busy, fill: true, action: onClose)
         }
     }
 
-    private func field(_ placeholder: String, _ text: Binding<String>, _ fill: Color) -> some View {
-        TextField(placeholder, text: text, axis: .vertical).font(.system(size: 16)).foregroundStyle(FB.text).lineLimit(1...4)
+    /// a white box with a hairline border, like every other text box in musing.
+    private func field(_ placeholder: String, _ text: Binding<String>, lines: ClosedRange<Int>) -> some View {
+        TextField(placeholder, text: text, axis: .vertical).font(.system(size: 15)).foregroundStyle(FB.text).lineLimit(lines)
             .textInputAutocapitalization(.never).disabled(busy)
-            .padding(.horizontal, 12).padding(.vertical, 10).background(fill, in: RoundedRectangle(cornerRadius: 12))
+            .padding(12)
+            .background(Color.white, in: RoundedRectangle(cornerRadius: UI.buttonRadius))
+            .overlay(RoundedRectangle(cornerRadius: UI.buttonRadius).stroke(FB.button, lineWidth: 1))
             .onChange(of: text.wrappedValue) { if text.wrappedValue.count > 200 { text.wrappedValue = String(text.wrappedValue.prefix(200)) } }
     }
 
@@ -501,8 +508,9 @@ struct PlanScreen: View {
         // "what if..." is a popup over the plan, not another page
         .overlay {
             if whatIfOpen, let p = plan, p.state == "proposing" {
-                ZStack {
-                    Color.black.opacity(0.45).ignoresSafeArea().onTapGesture { whatIfOpen = false }
+                GeometryReader { room in
+                    // a flat white card in the middle of a dark scrim. no shadow: nothing in musing has one.
+                    Color.black.opacity(0.75).ignoresSafeArea().onTapGesture { whatIfOpen = false }
                     ScrollView {
                         WhatIf(planId: p.id, existingLimit: p.me?.privateLimit, suggestions: p.whatIfs ?? [], onDone: {
                             Task {
@@ -511,10 +519,13 @@ struct PlanScreen: View {
                                 changing = false
                             }
                         }, onClose: { whatIfOpen = false })
-                        .padding(UI.cardPad + 2)
-                        .background(Color.white, in: RoundedRectangle(cornerRadius: 18))
-                        .shadow(color: .black.opacity(0.18), radius: 24, y: 8)
-                        .padding(.horizontal, UI.margin).padding(.vertical, 60)
+                        .padding(UI.cardPad)
+                        .background(Color.white, in: RoundedRectangle(cornerRadius: UI.cardRadius))
+                        // a tap on the card itself is not a tap on the scrim
+                        .onTapGesture {}
+                        .padding(.horizontal, UI.margin).padding(.vertical, 24)
+                        .frame(minHeight: room.size.height)
+                        .background(Color.clear.contentShape(Rectangle()).onTapGesture { whatIfOpen = false })
                     }
                     .scrollDismissesKeyboard(.interactively).scrollBounceBehavior(.basedOnSize)
                 }
