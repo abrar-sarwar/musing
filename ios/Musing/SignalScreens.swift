@@ -233,8 +233,13 @@ struct SignalCard: View {
     let onJoin: () -> Void
 
     private var meta: String {
-        signal.audience == "muse" ? "Only muse" : "\(audienceLabel(signal.audience)) · \(signal.waitFor)+ \(signal.waitFor == 1 ? "person" : "people")"
+        let base = signal.audience == "muse" ? "Only muse" : "\(audienceLabel(signal.audience)) · \(signal.waitFor)+ \(signal.waitFor == 1 ? "person" : "people")"
+        // a count, never who
+        return signal.inCount > 0 ? "\(base) · \(signal.inCount) in" : base
     }
+
+    /// sent in the last few minutes: muse may still be drafting
+    private var isFresh: Bool { parseDate(signal.createdAt).map { Date().timeIntervalSince($0) < 300 } ?? false }
 
     private var inLine: String { signal.inCount == 0 ? "" : " · \(signal.inCount) in so far" }
 
@@ -267,8 +272,13 @@ struct SignalCard: View {
     @ViewBuilder private var strip: some View {
         if let planId = signal.planId {
             Button { app.push(.plan(planId)) } label: { StatusStrip(text: planLine, chevron: true) }.buttonStyle(FadePress())
+        } else if signal.mine, isFresh {
+            StatusStrip(text: "Muse is working on this one")
+        } else if signal.mine, signal.audience == "muse" || signal.planState == "faded" || expiresIn(signal.expiresAt) == "expired" {
+            // nothing is going to come of this one by itself: offer the way back in
+            Button { app.handoff = signal.text } label: { StatusStrip(text: "No plan came of this. Tap to send it again.", chevron: true) }.buttonStyle(FadePress())
         } else if signal.mine {
-            StatusStrip(text: signal.planState == "faded" ? "This one didn't land." : "Waiting to turn this into a plan\(inLine)")
+            StatusStrip(text: "Waiting to turn this into a plan\(inLine)")
         } else if signal.joined {
             StatusStrip(text: "You're in\(signal.inCount > 1 ? " · \(signal.inCount) in so far" : ""). \(firstName(signal.author.name)) only sees the count.")
         } else {
@@ -296,6 +306,7 @@ struct MusingScreen: View {
     @State private var loading = true
     @State private var error: String?
     @State private var joining: String?
+    @State private var allMine = false
 
     init(compose: Bool, tab: MusingTab = .send) {
         self.compose = compose
@@ -353,7 +364,9 @@ struct MusingScreen: View {
         let friends = home?.friendSignals ?? []
         SectionTitle("Your signals")
         if mine.isEmpty { EmptyNote(note("Nothing sent yet. A signal you send shows up here.")) }
-        ForEach(mine) { s in SignalCard(signal: s) {} }
+        // the newest few, so friends' signals are never a long scroll away
+        ForEach(allMine ? mine : Array(mine.prefix(2))) { s in SignalCard(signal: s) {} }
+        if mine.count > 2, !allMine { QuietButton(label: "Show \(mine.count - 2) older", fill: true, outline: true) { allMine = true } }
         SectionTitle("Your friends' signals").padding(.top, 12)
         if friends.isEmpty { EmptyNote(note("Nothing from friends right now.")) }
         ForEach(friends) { s in SignalCard(signal: s, busy: joining == s.id) { join(s) } }
@@ -572,7 +585,7 @@ struct DiscoverTogetherScreen: View {
 
     private func bigCard(_ o: Opportunity, kicker: String) -> some View {
         Card(pad: 0) {
-            Pic(path: o.cover ?? "cover/hills.jpg").frame(height: 150).frame(maxWidth: .infinity)
+            CoverArt(path: o.cover, topic: o.topic).frame(height: 150).frame(maxWidth: .infinity)
             VStack(alignment: .leading, spacing: 4) {
                 Text(kicker).font(UI.kicker).tracking(0.3).foregroundStyle(FB.blue)
                 Text(o.title).font(UI.cardTitle).foregroundStyle(FB.text).multilineTextAlignment(.leading)
@@ -587,7 +600,7 @@ struct DiscoverTogetherScreen: View {
     private func listingCard(_ o: Opportunity) -> some View {
         let parts = o.sub.components(separatedBy: " · ")
         return Card(pad: 0) {
-            Pic(path: o.cover ?? "cover/hills.jpg").aspectRatio(1, contentMode: .fit)
+            CoverArt(path: o.cover, topic: o.topic).aspectRatio(1, contentMode: .fit)
             VStack(alignment: .leading, spacing: 2) {
                 Text(parts.first ?? "").font(UI.cardTitle).foregroundStyle(FB.text)
                 Text(o.title).font(.system(size: 14, weight: .semibold)).foregroundStyle(FB.text).lineLimit(2).multilineTextAlignment(.leading)
