@@ -9,19 +9,294 @@ private struct CardBox<Content: View>: View {
     }
 }
 
-/// what the starter has chosen for a draft that has not gone out yet. kept outside the
-/// screen so the choices survive muse redoing the draft (the redo is a new plan, a new screen).
-@MainActor
-final class DraftChoices: ObservableObject {
-    static let shared = DraftChoices()
-    @Published var audience = "friends" // close | friends | mutual
-    @Published var waitFor = 2
-    @Published var expires = "1w"
+// "what's the move?" one vague thought in. muse reads it, then drafts the plan.
+// nothing leaves this screen until the starter taps "send it" on the draft.
+struct SignalComposer: View {
+    // idle -> reading (understand) -> [asking: muse has one question] -> mixing (match) -> plan
+    enum Phase { case idle, reading, asking, mixing, error }
 
-    func reset() {
-        audience = "friends"
-        waitFor = 2
-        expires = "1w"
+    @EnvironmentObject var app: AppState
+    /// what this composer is doing, for the muse companion under the form
+    @ObservedObject var mood: MuseMood
+    let autoFocus: Bool
+    let onPlan: (String) -> Void
+    @State private var text = ""
+    @State private var phase = Phase.idle
+    @State private var reply = ""
+    @State private var pitch = ""
+    @State private var museId: String?
+    @State private var understood: Understood?
+    @State private var replayed = false
+    @State private var error: String?
+    @State private var work: Task<Void, Never>?
+    /// who the signal is shown to: "close" (close friends), "friends" or "mutual" (friends of friends).
+    /// every signal is an invite to someone; "only muse" is no longer a choice.
+    @State private var audience = "friends"
+    /// how many friends have to be in before it's on
+    @State private var waitFor = 2
+    @State private var expires = "1w"
+    @State private var context: SignalContext?
+    @State private var foundLine: String?
+    @FocusState private var focused: Bool
+
+    private var busy: Bool { phase == .reading || phase == .mixing }
+    private var trimmed: String { text.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var canSend: Bool { trimmed.count >= 2 && !busy }
+
+    private var note: String {
+        if !app.settings.museOn { return "Muse is off, so this goes out as typed, to the first few friends on your list." }
+        if audience == "muse" { return "Only you and muse see this. Muse drafts a plan, and nothing goes to anyone until you say so." }
+        return "\(audience == "mutual" ? "Friends and their friends" : audience == "close" ? "Your close friends" : "Friends") can see this signal and join. Muse drafts the plan, and nobody is asked until you send it."
+    }
+
+    var body: some View {
+        let museOn = app.settings.museOn
+        VStack(alignment: .leading, spacing: UI.gap) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(Copy.composerTitle).font(UI.title).foregroundStyle(FB.text)
+                Text(Copy.composerSub).font(.system(size: 14)).foregroundStyle(FB.muted)
+            }
+            if let context {
+                HStack(spacing: 6) {
+                    Image(systemName: context.kind == "listing" ? "storefront" : context.kind == "event" ? "calendar" : context.kind == "group" ? "person.3" : "play.rectangle").font(.system(size: 12))
+                    Text("Starting from \(context.title)").font(.system(size: 13, weight: .semibold)).lineLimit(1)
+                    Button { self.context = nil } label: { Image(systemName: "xmark").font(.system(size: 10, weight: .bold)) }.accessibilityLabel("remove")
+                }
+                .foregroundStyle(Muse.text).padding(.horizontal, 10).padding(.vertical, 6).background(Muse.soft, in: Capsule())
+            }
+            TextField(Copy.composerPlaceholder, text: $text, axis: .vertical)
+                .font(.system(size: 17)).foregroundStyle(FB.text).lineLimit(3...6)
+                .textInputAutocapitalization(.never).disabled(busy).focused($focused)
+                .onChange(of: text) { if text.count > 280 { text = String(text.prefix(280)) } }
+                .padding(UI.cardPad)
+                .background(Color.white, in: RoundedRectangle(cornerRadius: UI.cardRadius))
+                .overlay(RoundedRectangle(cornerRadius: UI.cardRadius).stroke(focused ? FB.blue.opacity(0.5) : FB.button, lineWidth: 1))
+                .accessibilityIdentifier("signal-text")
+
+            OptionRow(label: "Send to", options: [("close", "Close friends"), ("friends", "Friends only"), ("mutual", "Friends of friends")], selection: $audience, disabled: busy)
+            OptionRow(label: "Wait for at least", options: (1...5).map { ($0, peopleCount($0)) }, selection: $waitFor, disabled: busy)
+            OptionRow(label: "Expires after", options: [("1d", "1 day"), ("3d", "3 days"), ("1w", "1 week"), ("2w", "2 weeks")], selection: $expires, disabled: busy)
+
+            GradientButton(label: phase == .reading ? "Muse is reading" : phase == .mixing ? (museOn ? "Finding your people" : "Sending") : "Send a signal", big: true, busy: busy, disabled: !canSend) { send() }
+            Text(note).font(.system(size: 13).italic()).foregroundStyle(FB.muted).fixedSize(horizontal: false, vertical: true)
+
+            if museOn, phase != .idle, phase != .error {
+                VStack(alignment: .leading, spacing: 10) {
+                    MuseBubble(text: reply, thinking: phase == .reading)
+                    if let u = understood {
+                        Flow(spacing: 6) {
+                            tag(u.activity)
+                            if let t = u.timeHint, t != "unspecified" { tag(t) }
+                            if let v = u.vibe { tag(v) }
+                            if replayed { tag("replayed", muted: true) }
+                        }
+                        .padding(.leading, 40)
+                    }
+                    if phase == .asking, let q = understood?.clarifyingQuestion {
+                        MuseBubble(text: q)
+                        HStack(spacing: 8) {
+                            Text("Add a little more above and send again, or").font(UI.meta).foregroundStyle(FB.muted).frame(maxWidth: .infinity, alignment: .leading)
+                            QuietButton(label: "Go with it") { goAnyway() }
+                        }
+                        .padding(.leading, 40)
+                    }
+                    if phase == .mixing {
+                        if let foundLine { Text(foundLine).font(.system(size: 12)).foregroundStyle(FB.muted).padding(.leading, 40) }
+                        MuseBubble(text: pitch, thinking: true, label: Copy.pitchLead)
+                    }
+                }
+            }
+            if phase == .error || phase == .asking { QuietButton(label: "Start over", fill: true, outline: true) { reset() } }
+            if phase == .error { Text("That didn't go through (\(error ?? "")). Your thought is still here. Try again in a sec.").font(.system(size: 14)).foregroundStyle(FB.red) }
+        }
+        .onAppear {
+            takeHandoff()
+            if autoFocus { focused = true }
+        }
+        // a thought handed over from the reels card, a recap or muse's suggestion
+        .onChange(of: app.handoff) { takeHandoff() }
+        .onDisappear { work?.cancel() }
+        // the companion follows the real work: reading, then looking for people, then writing the plan
+        .onChange(of: phase) { tellMuse() }
+        .onChange(of: pitch.isEmpty) { tellMuse() }
+        .onChange(of: focused) { mood.typing = focused }
+    }
+
+    private func tellMuse() {
+        switch phase {
+        case .idle: mood.stage = .idle
+        case .reading: mood.stage = .reading
+        case .asking: mood.stage = .asking
+        case .mixing: mood.stage = !app.settings.museOn ? .sending : pitch.isEmpty ? .checking : .writing
+        case .error: mood.stage = .error
+        }
+    }
+
+    private func tag(_ t: String, muted: Bool = false) -> some View {
+        Text(t).font(.system(size: 13, weight: .semibold)).foregroundStyle(muted ? FB.muted : Muse.text)
+            .padding(.horizontal, 10).padding(.vertical, 5).background(muted ? FB.input : Muse.soft, in: Capsule())
+    }
+
+    private func takeHandoff() {
+        guard let h = app.handoff, phase == .idle else { return }
+        text = h
+        context = app.handoffContext
+        // a thought from a reel is an open invite like any other. the text is there to edit before it goes out.
+        app.handoff = nil
+        app.handoffContext = nil
+    }
+
+    private func reset() {
+        work?.cancel()
+        text = ""
+        reply = ""
+        pitch = ""
+        museId = nil
+        understood = nil
+        replayed = false
+        error = nil
+        context = nil
+        foundLine = nil
+        phase = .idle
+    }
+
+    private func fail(_ e: Error) {
+        guard !Task.isCancelled, !(e is CancellationError) else { return }
+        error = errorText(e)
+        phase = .error
+    }
+
+    private func mix(_ museId: String) async throws {
+        phase = .mixing
+        pitch = ""
+        var planId: String?
+        var streamError: String?
+        try await API.stream("/api/muse/match", user: app.userId, body: ["museId": museId, "audience": audience == "mutual" ? "mutual" : "friends"]) { event, data in
+            switch event {
+            case "found":
+                // what the server searched before muse started choosing
+                let n = { (k: String) in data[k] as? Int ?? 0 }
+                let parts = [n("events") > 0 ? "\(n("events")) events" : nil, n("groups") > 0 ? "\(n("groups")) groups" : nil, n("listings") > 0 ? "\(n("listings")) listings" : nil].compactMap { $0 }
+                foundLine = parts.isEmpty ? nil : "Looking through \(parts.joined(separator: ", ")) and your friends' free time"
+            case "delta": pitch += data["text"] as? String ?? ""
+            case "restart": pitch = ""
+            case "done": planId = data["planId"] as? String
+            case "error": streamError = data["message"] as? String ?? "muse had trouble"
+            default: break
+            }
+        }
+        if let streamError { throw ApiError(message: streamError) }
+        guard let planId else { throw ApiError(message: "muse didn't finish the plan") }
+        reset()
+        mood.freshPlanId = planId
+        onPlan(planId)
+    }
+
+    private func send() {
+        guard canSend else { return }
+        focused = false
+        mood.freshPlanId = nil
+        error = nil
+        reply = ""
+        understood = nil
+        museId = nil
+        work?.cancel()
+        let thought = trimmed
+        let user = app.userId
+        var body: [String: Any] = ["text": thought, "audience": audience, "waitFor": waitFor, "expires": expires]
+        if let context { body["context"] = ["kind": context.kind, "id": context.id] }
+        work = Task {
+            do {
+                if !app.settings.museOn {
+                    // muse off: what's left is a plain poll to the first few friends
+                    phase = .mixing
+                    let r: PlanIdResponse = try await API.post("/api/plans", user: user, body: body)
+                    reset()
+                    mood.freshPlanId = r.planId
+                    onPlan(r.planId)
+                    return
+                }
+                phase = .reading
+                var done: [String: Any]?
+                var streamError: String?
+                try await API.stream("/api/muse/understand", user: user, body: body) { event, data in
+                    switch event {
+                    case "delta": reply += data["text"] as? String ?? ""
+                    case "restart": reply = ""
+                    case "done": done = data
+                    case "error": streamError = data["message"] as? String ?? "muse had trouble"
+                    default: break
+                    }
+                }
+                if let streamError { throw ApiError(message: streamError) }
+                guard let done, let id = done["museId"] as? String, let raw = done["understood"],
+                      let u = try? API.decoder.decode(Understood.self, from: JSONSerialization.data(withJSONObject: raw)) else { throw ApiError(message: "muse didn't answer") }
+                reply = u.reply
+                understood = u
+                museId = id
+                replayed = done["source"] as? String == "cache"
+                if u.clarifyingQuestion != nil {
+                    phase = .asking // muse has one question. the person can answer or skip it.
+                    return
+                }
+                try await mix(id)
+            } catch let e { fail(e) }
+        }
+    }
+
+    private func goAnyway() {
+        guard let museId else { return }
+        work = Task {
+            do { try await mix(museId) } catch let e { fail(e) }
+        }
+    }
+}
+
+// muse suggests: one thought the person could send with a tap. cached per person,
+// so opening this screen does not cost a muse call every time.
+struct SuggestCard: View {
+    @EnvironmentObject var app: AppState
+    @State private var suggestion: Suggestion?
+    @State private var hidden = false
+    @State private var busy = false
+
+    var body: some View {
+        Group {
+            if !hidden, let s = suggestion {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 5) {
+                        Text("MUSE SUGGESTS").font(UI.kicker).tracking(0.3).foregroundStyle(Muse.text)
+                        Spacer()
+                        Button { hidden = true } label: { Image(systemName: "xmark").font(.system(size: 13, weight: .semibold)).foregroundStyle(FB.muted).frame(width: 28, height: 24) }
+                            .accessibilityLabel("dismiss suggestion")
+                    }
+                    Text("\u{201C}\(s.suggestion)\u{201D}").font(.system(size: 17, weight: .semibold)).foregroundStyle(FB.text)
+                    Text(s.why).font(.system(size: 14)).foregroundStyle(FB.muted)
+                    HStack(spacing: 8) {
+                        QuietButton(label: "Use this") { app.handoff = s.suggestion }
+                        QuietButton(label: busy ? "Thinking" : "Another", disabled: busy) {
+                            Task {
+                                busy = true
+                                // on a failure keep the one we have
+                                if let fresh: Suggestion = try? await API.get("/api/muse/suggest?fresh=1", user: app.userId) { suggestion = fresh }
+                                busy = false
+                            }
+                        }
+                    }
+                    .padding(.top, 4)
+                }
+                .padding(UI.cardPad)
+                .background(Muse.wash, in: RoundedRectangle(cornerRadius: UI.cardRadius))
+                .overlay(RoundedRectangle(cornerRadius: UI.cardRadius).stroke(Muse.line, lineWidth: 1))
+                .padding(.top, 8)
+            }
+        }
+        .task(id: "\(app.userId)-\(app.version)") {
+            suggestion = nil
+            let s: Suggestion? = try? await API.get("/api/muse/suggest", user: app.userId)
+            guard !Task.isCancelled else { return }
+            suggestion = s
+        }
     }
 }
 
@@ -180,10 +455,6 @@ struct PlanScreen: View {
     // `-whatif YES` as a launch argument opens the box straight away, for screenshots
     @State private var whatIfOpen = UserDefaults.standard.bool(forKey: "whatif")
     @State private var matchedOpen = true
-    @ObservedObject private var choices = DraftChoices.shared
-    /// the explicit last step before a draft goes out
-    @State private var confirming = false
-    @State private var another = false
 
     var body: some View {
         SubScreen(title: title, trailing: trailing) {
@@ -211,7 +482,6 @@ struct PlanScreen: View {
 
     private var title: String {
         guard let p = plan else { return "Plan" }
-        if p.role == "starter", p.state == "draft" { return "Your draft" }
         return p.role == "starter" ? "Your plan" : "\(firstName(p.starter.name))'s plan"
     }
 
@@ -251,33 +521,6 @@ struct PlanScreen: View {
         act(status) { try await API.data("POST", "/api/plans/\(planId)/respond", user: app.userId, body: ["status": status]) }
     }
 
-    /// a different idea for the same thought. muse redoes the draft; the old one is replaced.
-    private func tryAnother() {
-        another = true
-        error = nil
-        Task {
-            do {
-                var newId: String?
-                var streamError: String?
-                try await API.stream("/api/muse/match", user: app.userId, body: ["planId": planId, "revise": "try a different idea for this, not the same plan"]) { event, data in
-                    switch event {
-                    case "done": newId = data["planId"] as? String
-                    case "error": streamError = data["message"] as? String ?? "muse had trouble"
-                    default: break
-                    }
-                }
-                if let streamError { throw ApiError(message: streamError) }
-                guard let newId else { throw ApiError(message: "muse didn't finish the plan") }
-                another = false
-                app.back()
-                app.push(.plan(newId))
-            } catch let e {
-                error = errorText(e)
-                another = false
-            }
-        }
-    }
-
     private func cancel() {
         act("cancel", leaveAfter: true) { try await API.data("DELETE", "/api/plans/\(planId)", user: app.userId) }
     }
@@ -289,19 +532,6 @@ struct PlanScreen: View {
         let myStatus = p.me?.status
         let who = firstName(p.starter.name)
 
-        // muse stays with you: it made the draft, it watches the signal, it is there when it's on
-        if starter, p.state != "faded" {
-            HStack(spacing: 12) {
-                MuseFace(expression: p.state == "happening" ? .hype : .awake, size: 56)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(p.state == "draft" ? "muse made you a move." : p.state == "happening" ? "it's happening." : "signal sent.").font(.system(size: 22, weight: .heavy)).foregroundStyle(FB.text)
-                    Text(p.state == "draft" ? "here's what i came up with. nothing has gone to anyone yet." : p.state == "happening" ? "the chat and the event are yours." : "waiting for your people. \(p.downCount) of \(p.quorum) in so far.")
-                        .font(.system(size: 14)).foregroundStyle(FB.muted).fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: 0)
-            }
-        }
-
         PlanSummaryCard(plan: p, detail: true)
 
         // muse's voice: the pitch for a draft, the personal ask for a friend, the note after a re-solve
@@ -311,15 +541,7 @@ struct PlanScreen: View {
         let raw = !p.museOn ? p.rawText : nil
         if pitch != nil || ask != nil || note != nil || raw != nil {
             VStack(alignment: .leading, spacing: 10) {
-                if let pitch {
-                    // muse is already at the top of this screen, so its reason is just the words
-                    Card(tint: true) {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("WHY THIS FITS").font(UI.kicker).tracking(0.3).foregroundStyle(Muse.text)
-                            Text(pitch).font(.system(size: 16)).lineSpacing(3).foregroundStyle(FB.text).fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
-                }
+                if let pitch { MuseBubble(text: pitch, label: Copy.pitchLead) }
                 if let ask { MuseBubble(text: ask) }
                 if let raw { Text("\(starter ? "You asked" : "\(who) asked"): \u{201C}\(raw)\u{201D}").font(.system(size: 16)).foregroundStyle(FB.text) }
                 if let note { MuseBubble(text: note, label: p.version > 1 ? "small update" : nil) }
@@ -388,26 +610,11 @@ struct PlanScreen: View {
             if let error { Text(sentenceCase(error)).font(.system(size: 14)).foregroundStyle(FB.red) }
 
             if starter, p.state == "draft" {
-                SectionTitle("Before it goes out").padding(.top, 4)
-                OptionRow(label: "Send to", options: [("close", "Close friends"), ("friends", "Friends only"), ("mutual", "Friends of friends")], selection: $choices.audience, disabled: busy != nil)
-                OptionRow(label: "Wait for at least", options: (1...5).map { ($0, peopleCount($0)) }, selection: $choices.waitFor, disabled: busy != nil)
-                OptionRow(label: "Expires after", options: [("1d", "1 day"), ("3d", "3 days"), ("1w", "1 week"), ("2w", "2 weeks")], selection: $choices.expires, disabled: busy != nil)
-                GradientButton(label: Copy.sendIt, icon: "paperplane.fill", big: true, busy: busy == "send", disabled: another) { confirming = true }
-                    .confirmationDialog("Send this signal?", isPresented: $confirming, titleVisibility: .visible) {
-                        Button("Send signal") {
-                            let body: [String: Any] = ["audience": choices.audience, "waitFor": choices.waitFor, "expires": choices.expires]
-                            act("send") {
-                                try await API.data("POST", "/api/plans/\(planId)/send", user: app.userId, body: body)
-                                choices.reset()
-                            }
-                        }
-                        Button("Not yet", role: .cancel) {}
-                    } message: {
-                        Text("\(audienceLabel(choices.audience)) can see it and join. \(friendCount(p.invited).capitalized) \(p.invited == 1 ? "gets" : "get") a private ask from muse. It's on once \(peopleCount(min(choices.waitFor, max(1, p.invited)))) \(min(choices.waitFor, max(1, p.invited)) == 1 ? "is" : "are") in.")
-                    }
-                if p.museOn { QuietButton(label: another ? "Muse is thinking of another" : "Try another idea", disabled: another || busy != nil, fill: true) { tryAnother() } }
+                GradientButton(label: Copy.sendIt, icon: "paperplane.fill", big: true, busy: busy == "send") {
+                    act("send") { try await API.data("POST", "/api/plans/\(planId)/send", user: app.userId) }
+                }
                 QuietButton(label: Copy.notThis, fill: true, outline: true) { cancel() }
-                fine("This draft is private. Nothing is shared and nobody is asked until you tap Send signal.")
+                fine("Your signal is already out for friends to see and join. This step sends muse's private ask to each person above. Nobody sees who else was asked.")
             }
 
             if !starter, open, !whatIfOpen {

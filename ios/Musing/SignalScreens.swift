@@ -72,7 +72,7 @@ struct SegmentChips: View {
     @Binding var tab: MusingTab
     /// plans waiting on this person's answer: a dot on "View plans"
     var waiting = false
-    private let items: [(MusingTab, String)] = [(.send, "Ask muse"), (.signals, "View signals"), (.plans, "View plans")]
+    private let items: [(MusingTab, String)] = [(.send, "Send a signal"), (.signals, "View signals"), (.plans, "View plans")]
 
     var body: some View {
         HStack(spacing: 8) {
@@ -307,7 +307,7 @@ struct MusingScreen: View {
     @State private var error: String?
     @State private var joining: String?
     @State private var allMine = false
-    @StateObject private var session = MuseSession()
+    @StateObject private var mood = MuseMood()
 
     init(compose: Bool, tab: MusingTab = .send) {
         self.compose = compose
@@ -324,13 +324,8 @@ struct MusingScreen: View {
                 SegmentChips(tab: $tab, waiting: waiting)
                 ZStack(alignment: .top) {
                     // the composer stays mounted so a half-typed thought survives a look at another tab
-                    // muse stays mounted so a half-typed thought survives a look at another tab
-                    MuseHome(session: session, home: home, autoFocus: compose && tab == .send) { id in
-                        DraftChoices.shared.reset()
-                        Task { await load() }
-                        app.push(.plan(id))
-                    }
-                    .opacity(tab == .send ? 1 : 0).allowsHitTesting(tab == .send).accessibilityHidden(tab != .send)
+                    page { sendTab }
+                        .opacity(tab == .send ? 1 : 0).allowsHitTesting(tab == .send).accessibilityHidden(tab != .send)
                     if tab == .signals { page { signalsTab }.background(Color.white) }
                     if tab == .plans { page { plansTab }.background(Color.white) }
                 }
@@ -343,26 +338,13 @@ struct MusingScreen: View {
         }
         // any plan change anywhere: refetch. the server decides what this person may see.
         .onTableChange("plans") { Task { await load() } }
+        // `-muse_state reading|checking|writing|error` as a launch argument holds muse in that mood, for screenshots
+        .onAppear {
+            let stages: [String: MuseMood.Stage] = ["reading": .reading, "checking": .checking, "writing": .writing, "error": .error]
+            if let s = UserDefaults.standard.string(forKey: "muse_state").flatMap({ stages[$0] }) { mood.stage = s }
+        }
         // a thought handed over (run it back, a reel, a suggestion) goes to the composer
-        // `-muse_prompt "..."` as a launch argument types that and sends it once, for end to end checks
-        .task {
-            guard let p = UserDefaults.standard.string(forKey: "muse_prompt"), !p.isEmpty else { return }
-            try? await Task.sleep(for: .seconds(4))
-            session.text = p
-            try? await Task.sleep(for: .seconds(1))
-            session.submit(app: app)
-        }
-        .onChange(of: app.handoff, initial: true) {
-            guard let h = app.handoff else { return }
-            tab = .send
-            // it goes in the box. it is not sent: that is always the person's own tap.
-            if session.flow == .idle || session.flow == .composing || session.flow == .failed {
-                session.text = h
-                session.context = app.handoffContext
-            }
-            app.handoff = nil
-            app.handoffContext = nil
-        }
+        .onChange(of: app.handoff) { if app.handoff != nil { tab = .send } }
     }
 
     private func page<C: View>(@ViewBuilder _ content: () -> C) -> some View {
@@ -374,7 +356,20 @@ struct MusingScreen: View {
             }
             .scrollDismissesKeyboard(.interactively)
             .refreshable { await load() }
+            // muse is working, or has something to show: bring it into view
+            .onChange(of: mood.stage) { if mood.stage != .idle, mood.stage != .asking { withAnimation { proxy.scrollTo("muse", anchor: .bottom) } } }
+            .onChange(of: mood.hasNews) { if mood.hasNews { Task { try? await Task.sleep(for: .milliseconds(350)); withAnimation { proxy.scrollTo("muse", anchor: .bottom) } } } }
+            .onChange(of: mood.freshPlanId) { if mood.freshPlanId != nil { Task { try? await Task.sleep(for: .milliseconds(500)); withAnimation { proxy.scrollTo("muse", anchor: .bottom) } } } }
         }
+    }
+
+    @ViewBuilder private var sendTab: some View {
+        // the plan that comes back is shown by muse under the form, with a way in
+        SignalComposer(mood: mood, autoFocus: compose && tab == .send) { _ in
+            Task { await load() }
+        }
+        MuseCompanion(mood: mood, home: home).id("muse")
+        TracePanel(planId: nil)
     }
 
     @ViewBuilder private var signalsTab: some View {
