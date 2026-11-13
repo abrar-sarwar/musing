@@ -104,8 +104,8 @@ struct GradientButton: View {
             .foregroundStyle(.white)
             .padding(.horizontal, 16)
             .frame(maxWidth: big || fill ? .infinity : nil)
-            .frame(height: big ? 50 : 40)
-            .background(Muse.entryGradient, in: Capsule())
+            .frame(height: big ? UI.buttonBig : UI.button)
+            .background(Muse.entryGradient, in: RoundedRectangle(cornerRadius: UI.buttonRadius))
             .opacity(off ? 0.45 : 1)
         }
         .buttonStyle(FadePress())
@@ -117,6 +117,8 @@ struct QuietButton: View {
     let label: String
     var disabled = false
     var fill = false
+    /// white with a hairline border instead of the grey fill: the quietest choice in a group
+    var outline = false
     let action: () -> Void
 
     var body: some View {
@@ -124,8 +126,9 @@ struct QuietButton: View {
             Text(label).font(.system(size: 15, weight: .semibold)).foregroundStyle(FB.text).lineLimit(1)
                 .padding(.horizontal, 16)
                 .frame(maxWidth: fill ? .infinity : nil)
-                .frame(height: 40)
-                .background(FB.button, in: Capsule())
+                .frame(height: fill ? UI.buttonBig : UI.button)
+                .background(outline ? Color.white : FB.button, in: RoundedRectangle(cornerRadius: UI.buttonRadius))
+                .overlay(RoundedRectangle(cornerRadius: UI.buttonRadius).stroke(outline ? FB.button : .clear, lineWidth: 1))
                 .opacity(disabled ? 0.45 : 1)
         }
         .buttonStyle(FadePress())
@@ -243,6 +246,8 @@ struct FbHeader: View {
 struct SubScreen<Content: View>: View {
     @EnvironmentObject var app: AppState
     let title: String
+    /// icon buttons on the right of the bar
+    var trailing: [(icon: String, label: String, action: () -> Void)] = []
     @ViewBuilder var content: Content
 
     var body: some View {
@@ -254,6 +259,10 @@ struct SubScreen<Content: View>: View {
                 .accessibilityLabel("Back")
                 Text(title).font(.system(size: 17, weight: .semibold)).foregroundStyle(FB.text).lineLimit(1)
                 Spacer()
+                ForEach(Array(trailing.enumerated()), id: \.offset) { _, t in
+                    Button(action: t.action) { Image(systemName: t.icon).font(.system(size: 19, weight: .medium)).foregroundStyle(FB.blue).frame(width: 40, height: 36) }
+                        .accessibilityLabel(t.label)
+                }
             }
             .padding(.horizontal, 8).frame(height: 48)
             Hairline()

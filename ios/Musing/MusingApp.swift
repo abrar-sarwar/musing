@@ -31,8 +31,9 @@ struct RootView: View {
                     case .event(let id): EventDetailScreen(eventId: id)
                     case .listing(let id): ListingScreen(listingId: id)
                     case .person(let id): PersonScreen(personId: id)
-                    case .musing(let compose): MusingScreen(compose: compose)
+                    case .musing(let compose, let tab): MusingScreen(compose: compose, tab: tab)
                     case .plan(let id): PlanScreen(planId: id)
+                    case .discoverTogether(let id): DiscoverTogetherScreen(planId: id)
                     case .musingSettings: MusingSettingsScreen()
                     case .nudge: NudgePreview()
                     case .recap: RecapPreview()
@@ -88,7 +89,8 @@ struct RootView: View {
         // every screen has a link: musing://reels, musing://menu, musing://plan/<id>, ...
         let arg = url.pathComponents.dropFirst().first
         switch url.host ?? "" {
-        case "musing": app.path = [.musing(compose: false)]
+        // musing://musing?tab=signals|plans opens on that tab
+        case "musing": app.path = [.musing(compose: false, tab: comps?.queryItems?.first(where: { $0.name == "tab" })?.value.flatMap(MusingTab.init) ?? .send)]
         case "home", "reels", "marketplace", "dating", "notifications", "profile": if let tab = AppTab(rawValue: url.host ?? "") { app.go(tab) }
         case "menu": app.path = [.menu]
         case "search": app.path = [.search]
@@ -96,7 +98,7 @@ struct RootView: View {
         case "events": app.path = arg.map { [.events, .event($0)] } ?? [.events]
         case "listing": if let arg { app.path = [.listing(arg)] }
         case "people": if let arg { app.path = [.person(arg)] }
-        case "plan": if let arg { app.path = [.musing(compose: false), .plan(arg)] }
+        case "plan": if let arg { app.path = [.musing(compose: false, tab: .plans), .plan(arg)] }
         case "settings": app.path = [.musingSettings]
         case "developer": app.path = [.developer]
         case "groups": app.path = arg.map { [.groups, .group($0)] } ?? [.groups]

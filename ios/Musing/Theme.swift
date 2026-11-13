@@ -35,28 +35,51 @@ enum Muse {
     static let dating = Color(hex: 0x6f3fd8)
     static let gradient = LinearGradient(colors: [start, end], startPoint: .topLeading, endPoint: .bottomTrailing)
     static let entryGradient = LinearGradient(colors: [FB.blue, start], startPoint: .leading, endPoint: .trailing)
+    /// the faint blue to lavender wash behind a musing. card that leads somewhere
+    static let wash = LinearGradient(colors: [Color(hex: 0xf1f6ff), Color(hex: 0xf7f2ff)], startPoint: .leading, endPoint: .trailing)
+}
+
+// one set of sizes for every musing. screen, so cards, titles and buttons match everywhere.
+enum UI {
+    static let margin: CGFloat = 16 // screen edge to content
+    static let gap: CGFloat = 12 // between cards
+    static let cardRadius: CGFloat = 14
+    static let cardPad: CGFloat = 16
+    static let buttonRadius: CGFloat = 12
+    static let button: CGFloat = 40
+    static let buttonBig: CGFloat = 48
+    static let title = Font.system(size: 24, weight: .heavy) // one per screen
+    static let section = Font.system(size: 19, weight: .bold) // "Your signals", "Matched friends"
+    static let cardTitle = Font.system(size: 18, weight: .bold)
+    static let body = Font.system(size: 15)
+    static let meta = Font.system(size: 13)
+    static let kicker = Font.system(size: 12, weight: .bold) // small caps line above a card title
 }
 
 // space the floating tab bar needs at the bottom of every tab screen
 let tabBarHeight: CGFloat = 58
 let tabBarSpace: CGFloat = 96
 
-// musing. ui copy. all lowercase. do not edit casing.
+// musing. ui copy. one rule: titles, labels and buttons are sentence case, like the rest
+// of the app. muse's own voice (its bubbles, the brand) stays lowercase.
 enum Copy {
     static let brand = "musing."
-    static let composerPlaceholder = "what's the move?"
+    static let composerTitle = "What's the move?"
+    static let composerSub = "Any spontaneous thoughts? Let's make it actually happen."
+    static let composerPlaceholder = "lowkey wanna try a new food place..."
     static let pitchLead = "wait, hear me out..."
-    static let down = "i'm down"
-    static let whatIf = "what if..."
-    static let privateLimit = "just between us"
-    static let happening = "it's happening"
-    static let runItBack = "run it back"
-    static let sendIt = "send it"
-    static let notThis = "not this"
-    static let pass = "not this time"
+    static let down = "I'm in!"
+    static let maybe = "Maybe"
+    static let whatIf = "What if..."
+    static let privateLimit = "Just between us"
+    static let happening = "It's happening"
+    static let runItBack = "Run it back"
+    static let sendIt = "Send it"
+    static let notThis = "Not this"
+    static let pass = "Can't make it"
     static let solving = "muse is reworking it"
-    static let faded = "this one didn't land. nobody saw who passed."
-    static let privateNote = "only muse sees this. it shapes the plan and is never repeated."
+    static let faded = "This one didn't land. Nobody saw who passed."
+    static let privateNote = "Only muse sees this. It shapes the plan and is never repeated."
 }
 
 // small stable hash for deterministic mock values (avatar colors, like counts).
@@ -104,6 +127,17 @@ func money(_ n: Int) -> String {
 func compactCount(_ n: Int) -> String {
     guard n >= 1000 else { return String(n) }
     return n >= 10000 ? "\(Int((Double(n) / 1000).rounded()))K" : String(format: "%.1fK", Double(n) / 1000)
+}
+
+/// "expires in 6d", "expires in 5h", "expired". nil when the signal has no end.
+func expiresIn(_ iso: String?) -> String? {
+    guard let d = parseDate(iso) else { return nil }
+    let s = Int(d.timeIntervalSinceNow)
+    if s <= 0 { return "expired" }
+    if s < 3600 { return "expires in \(max(1, s / 60))m" }
+    if s < 86400 { return "expires in \(s / 3600)h" }
+    let days = Int((Double(s) / 86400).rounded())
+    return days >= 14 ? "expires in \(days / 7)w" : "expires in \(days)d"
 }
 
 /// "saturday at 1" -> "Saturday at 1"

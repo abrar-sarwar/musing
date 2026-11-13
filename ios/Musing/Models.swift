@@ -85,6 +85,26 @@ struct PlanView: Decodable, Identifiable {
     let eventId: String?
     // what muse found for this plan: at most one public event, one group, two listings
     let opportunities: [Opportunity]?
+    // signals: when the plan runs out if it is not real by then, and whether it already happened.
+    // optional so an older server still decodes.
+    let expiresAt: String?
+    let completed: Bool?
+}
+
+// one signal, shaped for one viewer. who is in is only ever a count.
+struct SignalView: Decodable, Identifiable {
+    let id: String
+    let author: Person
+    let text: String
+    let createdAt: String
+    let expiresAt: String?
+    let audience: String // friends | mutual | muse
+    let waitFor: Int
+    let mine: Bool
+    let planId: String?
+    let planState: String?
+    let inCount: Int
+    let joined: Bool
 }
 
 // a catalog record a plan uses. fictional mock data, never anyone's private activity.
@@ -143,6 +163,8 @@ struct MusingHome: Decodable {
     let asks: [PlanView]
     let mine: [PlanView]
     let muses: [MuseRow]
+    let signals: [SignalView]?
+    let friendSignals: [SignalView]?
 }
 
 struct Suggestion: Decodable {

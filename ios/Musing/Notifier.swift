@@ -37,7 +37,10 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         self.user = user
         ready = false
         seen = []
-        _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])
+        // `-skip_notifications YES` as a launch argument keeps the permission alert off screenshots
+        if !UserDefaults.standard.bool(forKey: "skip_notifications") {
+            _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])
+        }
         keepAwake()
         // whatever exists right now is the baseline. nothing old notifies.
         let first = await current(for: user)

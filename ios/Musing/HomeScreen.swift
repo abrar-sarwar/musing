@@ -373,53 +373,55 @@ struct MusingHomeCard: View {
     @EnvironmentObject var app: AppState
     @State private var home: MusingHome?
 
-    private static let chips = [("thrifting", "lowkey wanna go thrifting"), ("food run", "anyone down for food later?"), ("weekend plans", "need something to do this weekend")]
+    @State private var text = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 4) {
                 Image(systemName: "sparkles").font(.system(size: 12, weight: .bold)).foregroundStyle(Muse.start)
                 Text(Copy.brand).font(.system(size: 13.5, weight: .heavy)).foregroundStyle(Muse.start)
-                if !app.settings.museOn { Text("muse is off · plain poll").font(.system(size: 12)).foregroundStyle(FB.muted).padding(.leading, 6) }
+                if !app.settings.museOn { Text("Muse is off · plain poll").font(.system(size: 12)).foregroundStyle(FB.muted).padding(.leading, 6) }
             }
+            Text(Copy.composerTitle).font(UI.section).foregroundStyle(FB.text).padding(.top, 2)
+            Text(Copy.composerSub).font(UI.meta).foregroundStyle(FB.muted).lineLimit(1).minimumScaleFactor(0.85).padding(.top, 1)
+
+            // a plan in motion: one line, tappable. counts only, never who.
             if let state = pickHomeState(home) {
-                Text(state.headline).font(.system(size: 19, weight: .heavy)).foregroundStyle(FB.text).lineLimit(2).minimumScaleFactor(0.9).padding(.top, 2)
-                Text(state.sub).font(.system(size: 13.5)).foregroundStyle(FB.muted).lineLimit(1).minimumScaleFactor(0.85).padding(.top, 1)
-                HStack(spacing: 8) {
-                    cta(state.action) {
-                        if let id = state.planId { app.push(.plan(id)) } else { compose(state.thought) }
+                Button {
+                    if let id = state.planId { app.push(.plan(id)) } else { compose(state.thought) }
+                } label: {
+                    HStack(spacing: 6) {
+                        Text(sentenceCase(state.headline)).font(.system(size: 14, weight: .semibold)).foregroundStyle(FB.blue).lineLimit(1).minimumScaleFactor(0.85)
+                        Spacer(minLength: 0)
+                        Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(FB.blue)
                     }
-                    Button { compose(nil) } label: { Text("new thought").font(.system(size: 14.5, weight: .semibold)).foregroundStyle(FB.blue).padding(.horizontal, 6) }
-                        .accessibilityLabel("start a new thought")
+                    .padding(.horizontal, 12).frame(height: 36).background(Color.white.opacity(0.8), in: RoundedRectangle(cornerRadius: 8))
                 }
-                .padding(.top, 8)
-            } else {
-                Text(Copy.composerPlaceholder).font(.system(size: 19, weight: .heavy)).foregroundStyle(FB.text).padding(.top, 2)
-                Text("that random thought? let's make it happen with friends.").font(.system(size: 13.5)).foregroundStyle(FB.muted).lineLimit(1).minimumScaleFactor(0.85).padding(.top, 1)
-                HStack(spacing: 8) {
-                    Button { compose(nil) } label: {
-                        Text("lowkey wanna do something this weekend...").font(.system(size: 14.5)).foregroundStyle(FB.muted).lineLimit(1)
-                            .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 14).frame(height: 36).background(FB.input, in: Capsule())
-                    }
-                    .buttonStyle(FadePress()).accessibilityLabel("type a thought for muse")
-                    cta("make a move") { compose(nil) }
-                }
-                .padding(.top, 8)
-                HStack(spacing: 6) {
-                    ForEach(Self.chips, id: \.0) { chip in
-                        Button { compose(chip.1) } label: {
-                            Text(chip.0).font(.system(size: 13, weight: .semibold)).foregroundStyle(FB.text)
-                                .padding(.horizontal, 11).padding(.vertical, 4).overlay(Capsule().stroke(FB.button, lineWidth: 1))
-                        }
-                        .buttonStyle(FadePress()).accessibilityLabel("start with \(chip.0)")
-                    }
-                }
-                .padding(.top, 7)
+                .buttonStyle(FadePress()).padding(.top, 8)
+                .accessibilityLabel("\(state.headline) \(state.sub)")
             }
+
+            HStack(spacing: 8) {
+                TextField(Copy.composerPlaceholder, text: $text)
+                    .font(.system(size: 14.5)).foregroundStyle(FB.text).textInputAutocapitalization(.never).submitLabel(.go)
+                    .onSubmit { move() }
+                    .padding(.horizontal, 12).frame(height: UI.button)
+                    .background(Color.white, in: RoundedRectangle(cornerRadius: UI.buttonRadius))
+                    .accessibilityLabel("type a thought for muse")
+                GradientButton(label: "Make a move") { move() }
+            }
+            .padding(.top, 10)
+            Button { app.push(.musing(compose: false, tab: .plans)) } label: {
+                Text("View upcoming plans").font(.system(size: 15, weight: .semibold)).foregroundStyle(FB.blue)
+                    .frame(maxWidth: .infinity).frame(height: UI.button)
+                    .overlay(RoundedRectangle(cornerRadius: UI.buttonRadius).stroke(FB.blue.opacity(0.45), lineWidth: 1))
+            }
+            .buttonStyle(FadePress()).padding(.top, 8)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 12).padding(.top, 9).padding(.bottom, 10)
-        .overlay(RoundedRectangle(cornerRadius: 14).stroke(FB.button, lineWidth: 1))
+        .padding(12)
+        .background(Muse.wash, in: RoundedRectangle(cornerRadius: UI.cardRadius))
+        .overlay(RoundedRectangle(cornerRadius: UI.cardRadius).stroke(Muse.line, lineWidth: 1))
         .padding(.horizontal, 12).padding(.bottom, 12)
         // paint from the last good answer for this person, then refresh in the background.
         // this endpoint is database only, so opening home never costs a muse call.
@@ -446,11 +448,11 @@ struct MusingHomeCard: View {
         app.push(.musing(compose: true))
     }
 
-    private func cta(_ label: String, _ action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(label).font(.system(size: 14.5, weight: .bold)).foregroundStyle(.white).padding(.horizontal, 16).frame(height: 36).background(Muse.entryGradient, in: Capsule())
-        }
-        .buttonStyle(FadePress())
+    /// whatever was typed here goes to the composer, so nothing is typed twice
+    private func move() {
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        text = ""
+        compose(t.isEmpty ? nil : t)
     }
 }
 

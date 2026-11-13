@@ -4,9 +4,12 @@ enum AppTab: String, CaseIterable {
     case home, reels, marketplace, dating, notifications, profile
 }
 
+/// the three tabs of the musing. surface
+enum MusingTab: String, Hashable { case send, signals, plans }
+
 enum Route: Hashable {
     case search, menu, messages, thread(String), events, event(String), listing(String), person(String)
-    case musing(compose: Bool), plan(String), musingSettings, nudge, recap
+    case musing(compose: Bool, tab: MusingTab = .send), plan(String), discoverTogether(String), musingSettings, nudge, recap
     case groups, group(String), publicEvent(String)
     case developer
 }
