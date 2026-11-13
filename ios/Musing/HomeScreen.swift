@@ -378,7 +378,7 @@ struct MusingHomeCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 4) {
-                Image(systemName: "sparkles").font(.system(size: 12, weight: .bold)).foregroundStyle(Muse.start)
+                MuseFace(expression: .awake, size: 20)
                 Text(Copy.brand).font(.system(size: 13.5, weight: .heavy)).foregroundStyle(Muse.start)
                 if !app.settings.museOn { Text("Muse is off · plain poll").font(.system(size: 12)).foregroundStyle(FB.muted).padding(.leading, 6) }
             }

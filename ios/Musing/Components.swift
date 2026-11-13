@@ -64,8 +64,8 @@ struct Avatar: View {
 struct MuseAvatar: View {
     var size: CGFloat = 40
     var body: some View {
-        Circle().fill(Muse.gradient).frame(width: size, height: size)
-            .overlay(Image(systemName: "sparkles").font(.system(size: size * 0.48, weight: .semibold)).foregroundStyle(.white))
+        // muse's face, the way a contact photo would show it
+        MuseFace(expression: .awake, size: size)
     }
 }
 

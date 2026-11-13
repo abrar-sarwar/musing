@@ -73,7 +73,7 @@ If you add a route folder under `web/app/api` while `pnpm dev` is running and it
 
 1. **spark + understand.** you type a half-formed thought or start from a seeded inspiration surface. muse reads it and streams one line back. you choose who the signal is shown to (friends only, friends of friends, or only muse), how many friends it waits for (1 to 5, default 2) and when it expires (1 day to 2 weeks, default 1 week). "only muse" keeps it between you and muse.
    - **friends' signals.** a signal shared with friends appears under "your friends' signals" with its author, their words and a count of who is in. a friend can tap "i'm into this"; that counts as a yes on the plan, now or once it is sent. the author sees the count move, never who.
-2. **connect (the mix).** the backend finds eligible existing friends first; muse picks 3 or 4 people who fit and drafts a private plan. nothing goes out until you tap "send it".
+2. **connect (the mix).** the backend finds eligible existing friends first; muse picks 3 or 4 people who fit and drafts a private plan. nothing goes out until you tap "Send signal" on the draft and confirm.
 3. **explore facebook.** the server searches seeded Events, Groups and Marketplace records and gives muse only grounded candidates that match the thought and timing. these are mock hackathon integrations, not live facebook inventory.
 4. **invite.** each friend gets their own low-pressure line from muse. nobody sees who else was asked.
 5. **coordinate privately.** "i'm in", "maybe" and "can't make it" stay private. a maybe is visible only to the person who said it and counts neither for nor against the plan. everyone sees a count, never the identities behind it. a friend can offer "what if..." in the open or tell muse a private limit; muse re-solves without repeating the private reason.
@@ -117,9 +117,19 @@ cd web && pnpm test:discover        # 57 thoughts through the real search, no da
 
 known limits: events only surface at times the person is free, so a morning run never shows for maya (she is free from 11); day and evening words are read by rules, not by muse; weeknight events do not exist in the catalog; listings have no photos beyond the original 22.
 
+### the muse screen
+
+verified current behavior in the simulator against the hosted server (one prompt, start to finish): "what's the move?" opens on muse, a small cream plush character drawn in the app (`ios/Musing/MuseCharacter.swift`), asleep and dreaming ideas drawn from the seeded catalog, the person's own reels topics and a stock list. there is no form: one prompt box. the flow is a state machine in `ios/Musing/MuseHome.swift` (`MuseSession`): idle, composing, mewing, mewed, then the draft's own screen.
+
+- typing, tapping an idea or opening the screen never calls muse and never creates anything.
+- sending a prompt starts one drafting run. the thought is stored private (`audience: "muse"`), a second tap while it runs does nothing, and a newer prompt makes an older answer stale.
+- the lines shown while muse works are things that happened: it read the thought, the counts the server searched, the plan text arriving.
+- when the draft comes back muse says "mewed." and the app opens the draft. the draft is private. who sees the signal, how many it waits for and when it expires are chosen there and written in the same request that sends it (`POST /api/plans/[id]/send` with `{ audience, waitFor, expires }`, `applyChoices` in `web/lib/plans.ts`). a close-friends signal drops anyone on the draft who is not a close friend, and refuses if that leaves nobody.
+- not verified on a device: the keyboard send key, the "muse needs one thing" question state and the retry state.
+
 ### changing a draft before it goes out
 
-verified current behavior on the server (run against the hosted database: add, remove, a refused non-friend, a refused other person, and a muse redo that moved the day); the screen itself builds but has not been exercised on a device. sending a signal and sending the plan are two steps: "Send a signal" puts the thought where the chosen friends can see and join it and has muse draft a plan; "Ask these friends" on the draft sends muse's private ask to each person on it. between the two, the draft is the starter's to change:
+verified current behavior on the server (run against the hosted database: add, remove, a refused non-friend, a refused other person, and a muse redo that moved the day); the screen itself builds but has not been exercised on a device. sending is one step now: see "the muse screen" below.
 
 - **who gets asked:** take anyone off, or add any of your own friends muse did not pick (`POST /api/plans/[id]/picks`, `web/lib/draft.ts`). an added friend gets a plain ask built from the plan, not one muse wrote. no muse call.
 - **what the plan is:** tell muse what to change in plain words ("make it sunday", "somewhere cheaper"). muse redoes the plan knowing the first draft and the request, and the old draft is replaced (`POST /api/muse/match` with `{ planId, revise }`). one muse call. the redo starts from muse again, so people added or removed by hand before it are not carried over, and a friend who is not free at the new time is still left out.
@@ -127,7 +137,7 @@ verified current behavior on the server (run against the hosted database: add, r
 
 ### who a signal goes to
 
-verified current behavior on the server and in the composer: a signal goes to **close friends**, **friends only** or **friends of friends**. "only muse" is no longer a choice. close friends is a flag on a friendship (`friendships.close`, migration `0008`): it is one person's call about another, it is seeded (maya's close friends are alex, jo and sam) and there is no screen to edit it yet. a close-friends signal is shown only to the people its author marked close, and muse picks from them alone. a thought started from a reel is an invite like any other; the text handed over never names who liked the reel. `muse` (nobody) remains as a stored value for retired signals and older builds.
+verified current behavior on the server; the choice is made on the draft, at the moment of sending: a signal goes to **close friends**, **friends only** or **friends of friends**. "only muse" is no longer a choice. close friends is a flag on a friendship (`friendships.close`, migration `0008`): it is one person's call about another, it is seeded (maya's close friends are alex, jo and sam) and there is no screen to edit it yet. a close-friends signal is shown only to the people its author marked close, and muse picks from them alone. a thought started from a reel is an invite like any other; the text handed over never names who liked the reel. `muse` (nobody) remains as a stored value for retired signals and older builds.
 
 ## product boundaries
 
