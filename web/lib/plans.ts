@@ -526,14 +526,20 @@ export async function makeItReal(planId: string): Promise<void> {
 
   // claim the work. only one caller gets through, and a claim that died is free again
   // after a minute, so a failed attempt can be retried without ever making two chats.
+  // two plain conditional updates instead of one or() filter: the or() form fails on
+  // some postgrest builds, and a claim error must never be mistaken for "someone else
+  // has it", so an error here throws (and is logged by the caller) rather than
+  // silently leaving the plan without its chat, card and event.
   const stale = new Date(Date.now() - 60_000).toISOString();
-  const { data: claimed } = await db
-    .from("plans")
-    .update({ making_at: new Date().toISOString() })
-    .eq("id", planId)
-    .is("thread_id", null)
-    .or(`making_at.is.null,making_at.lt.${stale}`)
-    .select("id");
+  const claimUpdate = { making_at: new Date().toISOString() };
+  const freshClaim = await db.from("plans").update(claimUpdate).eq("id", planId).is("thread_id", null).is("making_at", null).select("id");
+  if (freshClaim.error) throw new Error(`makeItReal claim: ${freshClaim.error.message}`);
+  let claimed = freshClaim.data;
+  if (!claimed || claimed.length === 0) {
+    const staleClaim = await db.from("plans").update(claimUpdate).eq("id", planId).is("thread_id", null).lt("making_at", stale).select("id");
+    if (staleClaim.error) throw new Error(`makeItReal claim: ${staleClaim.error.message}`);
+    claimed = staleClaim.data;
+  }
   if (!claimed || claimed.length === 0) return;
 
   const settings = await getSettings();
@@ -683,14 +689,20 @@ export async function whatIf(input: WhatIfInput, onText: (delta: string) => void
     const timeMoved = o.when_day !== plan.when_day || o.when_time !== plan.when_time;
     const changed = o.changed || timeMoved || lower(o.where_text) !== plan.where_text;
 
-    // answers follow the new shape: the asker is in if it works for them; anyone who
-    // had said yes but isn't free at the new time gets asked again, quietly.
+    // answers follow the new shape, with one consent rule: exploring an
+    // alternative is never itself a yes. a what-if does not move the asker to
+    // "down", and if the plan changed, an earlier yes from the asker was about
+    // the old shape, so they are asked again like everyone else. only an
+    // explicit respond("down") commits a person, which keeps the move to
+    // "happening" something someone chose, never a side effect of asking
+    // "what if we moved it?". (settle() below can therefore only confirm a
+    // quorum that explicit answers already reached.)
     const generic = `${lower(firstName(starter.name))} is thinking ${lower(o.activity)}, ${lower(o.when_text)}. ${lower(o.where_text)}. no pressure either way.`;
     for (const m of members) {
       const u = users.get(m.user_id);
       const patch: Partial<PlanMember> = {};
       if (m.user_id === input.userId) {
-        if (o.works_for_asker && m.status !== "out") patch.status = "down";
+        if (changed && m.status !== "out") patch.status = "pending";
       } else if (changed) {
         if (m.status === "down" && timeMoved && !isFreeAt(u?.free_windows ?? [], o.when_day, o.when_time)) patch.status = "pending";
         if (m.status !== "down" || patch.status === "pending") patch.personal_ask = generic;
