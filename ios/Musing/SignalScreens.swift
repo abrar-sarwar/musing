@@ -207,7 +207,7 @@ struct PlanSummaryCard: View {
         let who = "\(plan.role == "starter" ? "You" : firstName(plan.starter.name)) + \(friendCount(plan.invited)) invited"
         let left = plan.state == "draft" || plan.state == "proposing" ? expiresIn(plan.expiresAt).map(sentenceCase) : nil
         // the facebook events look, like the events tab: a plan reads as the event it is becoming
-        EventStyleCard(cover: found?.cover, topic: found?.activity.first ?? plan.activity,
+        EventStyleCard(cover: found?.cover, topic: found?.topic ?? plan.activity,
                        kicker: planKicker(plan) + (waitingOnMe && !detail ? " · WAITING ON YOU" : ""),
                        date: plan.when ?? "Date to be decided", title: sentenceCase(plan.activity ?? "A plan"),
                        place: plan.where.map(sentenceCase), counts: [who, left].compactMap { $0 }.joined(separator: " · ")) {
