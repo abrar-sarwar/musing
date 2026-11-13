@@ -181,6 +181,51 @@ struct Band: View {
 
 enum HeaderAction: String { case create, search, messenger, more, assistant }
 
+// An explicit icon style prevents the system button border from inflating compact
+// headers when Accessibility > Display & Text Size > Show Borders is enabled.
+// We keep a visible outline for that preference instead of suppressing it.
+private struct HeaderIconButton: View {
+    @Environment(\.accessibilityShowBorders) private var showBorders
+    let symbol: String
+    let label: String
+    var dark = false
+    var badge: String? = nil
+    var tint: Color? = nil
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 22, weight: .medium))
+                .foregroundStyle(tint ?? (dark ? Color.white : FB.text))
+                .frame(width: 44, height: 44)
+                .background {
+                    if showBorders {
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(dark ? Color.white.opacity(0.12) : FB.blueSoft)
+                    }
+                }
+                .overlay {
+                    if showBorders {
+                        RoundedRectangle(cornerRadius: 12)
+                            .strokeBorder(dark ? Color.white.opacity(0.85) : FB.blue, lineWidth: 1)
+                    }
+                }
+                .overlay(alignment: .topTrailing) {
+                    if let badge {
+                        Text(badge).font(.system(size: 11, weight: .bold)).foregroundStyle(.white)
+                            .frame(minWidth: 18, minHeight: 18).background(FB.badge, in: Circle())
+                            .overlay(Circle().stroke(dark ? Color.black : .white, lineWidth: 1.5))
+                            .offset(x: 4, y: -2)
+                    }
+                }
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(FadePress())
+        .accessibilityLabel(label)
+    }
+}
+
 // the one mobile facebook header. home shows the wordmark, every other tab a big bold title.
 struct FbHeader: View {
     @EnvironmentObject var app: AppState
@@ -212,32 +257,30 @@ struct FbHeader: View {
 
     var body: some View {
         let ink = dark ? Color.white : FB.text
-        HStack(spacing: 0) {
-            Button { app.push(.menu) } label: { Image(systemName: "line.3.horizontal").font(.system(size: 24, weight: .medium)).foregroundStyle(ink) }
-                .accessibilityLabel("Menu").padding(.trailing, 8)
-            if let title {
-                Text(title).font(.system(size: 27, weight: .heavy)).tracking(-0.6).foregroundStyle(ink)
-            } else {
-                Text("facebook").font(.system(size: 31, weight: .heavy)).tracking(-1.6).foregroundStyle(FB.blue).offset(y: -2)
+        HStack(spacing: 4) {
+            HeaderIconButton(symbol: "line.3.horizontal", label: "Menu", dark: dark) {
+                app.push(.menu)
             }
-            Spacer()
-            ForEach(actions, id: \.self) { a in
-                Button { press(a) } label: {
-                    Image(systemName: icon(a)).font(.system(size: 23, weight: .medium)).foregroundStyle(ink)
-                        .overlay(alignment: .topTrailing) {
-                            if a == .messenger {
-                                Text("3").font(.system(size: 11, weight: .bold)).foregroundStyle(.white)
-                                    .frame(minWidth: 18, minHeight: 18).background(FB.badge, in: Circle())
-                                    .overlay(Circle().stroke(dark ? Color.black : .white, lineWidth: 1.5))
-                                    .offset(x: 8, y: -7)
-                            }
-                        }
+            Group {
+                if let title {
+                    Text(title).font(.system(size: 27, weight: .heavy)).tracking(-0.6).foregroundStyle(ink)
+                } else {
+                    Text("facebook").font(.system(size: 31, weight: .heavy)).tracking(-1.6)
+                        .foregroundStyle(FB.blue).offset(y: -2)
                 }
-                .accessibilityLabel(a.rawValue)
-                .padding(.leading, 18)
+            }
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .layoutPriority(1)
+            ForEach(actions, id: \.self) { a in
+                HeaderIconButton(symbol: icon(a), label: a.rawValue.capitalized,
+                                 dark: dark, badge: a == .messenger ? "3" : nil) {
+                    press(a)
+                }
             }
         }
-        .padding(.leading, 12).padding(.trailing, 12)
+        .padding(.horizontal, 12)
         .frame(height: 52)
     }
 }
@@ -252,16 +295,14 @@ struct SubScreen<Content: View>: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 0) {
-                Button { app.back() } label: {
-                    Image(systemName: "chevron.left").font(.system(size: 20, weight: .semibold)).foregroundStyle(FB.text).frame(width: 36, height: 36)
-                }
-                .accessibilityLabel("Back")
-                Text(title).font(.system(size: 17, weight: .semibold)).foregroundStyle(FB.text).lineLimit(1)
-                Spacer()
+            HStack(spacing: 4) {
+                HeaderIconButton(symbol: "chevron.left", label: "Back") { app.back() }
+                Text(title).font(.system(size: 17, weight: .semibold)).foregroundStyle(FB.text)
+                    .lineLimit(1).minimumScaleFactor(0.7)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .layoutPriority(1)
                 ForEach(Array(trailing.enumerated()), id: \.offset) { _, t in
-                    Button(action: t.action) { Image(systemName: t.icon).font(.system(size: 19, weight: .medium)).foregroundStyle(FB.blue).frame(width: 40, height: 36) }
-                        .accessibilityLabel(t.label)
+                    HeaderIconButton(symbol: t.icon, label: t.label, tint: FB.blue, action: t.action)
                 }
             }
             .padding(.horizontal, 8).frame(height: 48)
