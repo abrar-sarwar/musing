@@ -123,7 +123,12 @@ ${i.found.listings.map((l) => `- ${l.id} | ${l.title} | $${l.price} | ${l.catego
 // signal, with no duplicates.
 export function validateParticipants(o: Converged, signals: SignalCandidate[]): string | null {
   if (o.participants.length < 1 || o.participants.length > 3) return `expected 1 to 3 participants, got ${o.participants.length}`;
-  const byUser = new Map(signals.map((s) => [s.userId, s]));
+  // a friend can have several open signals. the participant must name one of
+  // THAT friend's signals: any of them is a true reference to the friend,
+  // and the engine consumes exactly the one named. a signal belonging to
+  // someone else, or to nobody, fails closed.
+  const byUser = new Map<string, SignalCandidate[]>();
+  for (const s of signals) byUser.set(s.userId, [...(byUser.get(s.userId) ?? []), s]);
   const byMuse = new Map(signals.map((s) => [s.museId, s]));
   for (const p of o.participants) {
     if (!byUser.has(p.user_id)) {
@@ -133,9 +138,9 @@ export function validateParticipants(o: Converged, signals: SignalCandidate[]): 
   }
   const seen = new Set<string>();
   for (const p of o.participants) {
-    const sig = byUser.get(p.user_id);
-    if (!sig) return `unknown user id "${p.user_id}"`;
-    if (p.muse_id !== sig.museId) return `muse id "${p.muse_id}" is not ${p.user_id}'s open signal`;
+    const theirs = byUser.get(p.user_id);
+    if (!theirs) return `unknown user id "${p.user_id}"`;
+    if (!theirs.some((s) => s.museId === p.muse_id)) return `muse id "${p.muse_id}" is not ${p.user_id}'s open signal`;
     if (seen.has(p.user_id)) return `duplicate participant "${p.user_id}"`;
     seen.add(p.user_id);
   }

@@ -59,6 +59,14 @@ function r1() {
 
   o = out([{ user_id: "alex", muse_id: "m-alex" }, { user_id: "jo", muse_id: "m-jo" }, { user_id: "alex", muse_id: "m-alex" }, { user_id: "jo", muse_id: "m-jo" }]);
   check(P, "more than 3 participants fails closed", validateParticipants(o, signals) !== null, validateParticipants(o, signals) ?? "passed?!");
+
+  // a friend with two open signals: naming either of their own signals is a
+  // true reference; naming the other friend's still fails closed.
+  const multi = [sig("alex", "m-alex"), sig("alex", "m-alex-2"), sig("jo", "m-jo")];
+  o = out([{ user_id: "alex", muse_id: "m-alex-2" }, { user_id: "jo", muse_id: "m-jo" }]);
+  check(P, "a friend's second open signal is a valid reference", validateParticipants(o, multi) === null, validateParticipants(o, multi) ?? "passed");
+  o = out([{ user_id: "alex", muse_id: "m-jo" }]);
+  check(P, "with several signals open, another friend's signal still fails closed", validateParticipants(o, multi) !== null, validateParticipants(o, multi) ?? "passed?!");
 }
 
 // --------------------------------------------------------------------- R2

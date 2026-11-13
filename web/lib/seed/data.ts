@@ -298,11 +298,6 @@ export const PAST_MUSES = [
   { user_id: "maya", raw_text: "kinda wanna go thrifting this weekend but idk who'd be into it", created_at: daysAgo(10) },
   { user_id: "maya", raw_text: "ramen night would be fun", created_at: daysAgo(21) },
   { user_id: "maya", raw_text: "miss the farmers market, haven't been in forever", created_at: daysAgo(35) },
-  // open signals from friends. they sit unanswered until something converges with
-  // them (or their owner opens the mix themselves). understood on demand by the
-  // convergence pass, for real, the first time it looks at them.
-  { user_id: "alex", raw_text: "need something fun to do this weekend", created_at: daysAgo(1) },
-  { user_id: "jo", raw_text: "i've been wanting to explore some vintage markets", created_at: daysAgo(2) },
 ];
 
 export const POSTS = [
@@ -409,6 +404,8 @@ export const LISTINGS = [
 // private (audience "muse") and must never show for anyone but sam. jo's goes to close friends only.
 const daysAhead = (n: number) => new Date(Date.now() + n * 86_400_000).toISOString();
 export const FRIEND_SIGNALS: Array<{ key: string; user_id: string; raw_text: string; audience: "close" | "friends" | "mutual" | "muse"; wait_for: number; created_at: string; expires_at: string; interested: string[] }> = [
+  { key: "alex-weekend", user_id: "alex", raw_text: "need something fun to do this weekend", audience: "friends", wait_for: 2, created_at: daysAgo(1), expires_at: daysAhead(6), interested: [] },
+  { key: "jo-vintage", user_id: "jo", raw_text: "i've been wanting to explore some vintage markets", audience: "friends", wait_for: 2, created_at: daysAgo(2), expires_at: daysAhead(5), interested: [] },
   { key: "alex-records", user_id: "alex", raw_text: "lowkey wanna dig through a record store this weekend", audience: "friends", wait_for: 2, created_at: daysAgo(1), expires_at: daysAhead(6), interested: ["sam"] },
   { key: "jo-ramen", user_id: "jo", raw_text: "anyone down for late night ramen", audience: "close", wait_for: 3, created_at: hoursAgo(5), expires_at: daysAhead(2), interested: ["alex", "sam"] },
   { key: "priya-climbing", user_id: "priya", raw_text: "want to try that new climbing gym", audience: "friends", wait_for: 2, created_at: daysAgo(2), expires_at: daysAhead(12), interested: [] },

@@ -1,18 +1,22 @@
 import { serverDb } from "@/lib/db/server";
-import { discover, topicsFor } from "@/lib/discover";
+import { discover } from "@/lib/discover";
 import { converge, type SignalCandidate } from "@/lib/muse/converge";
 import type { Matched } from "@/lib/muse/match";
 import { understand, UnderstandSchema } from "@/lib/muse/understand";
 import { createDraftFromMatch, sendPlan, cancelPlan } from "@/lib/plans";
 import { getSettings } from "@/lib/settings";
+import { isExpired, parseAudience } from "@/lib/signals";
 import { firstName } from "@/lib/time";
 import type { FreeWindow, User } from "@/lib/types";
 import { todayLine } from "@/lib/when";
 
 // convergence engine. when a signal lands, look once at the open signals of the
-// owner's friends and ask muse whether they converge. deterministic code owns
-// eligibility (friends only, recent, unconsumed, overlapping free time), privacy
-// (a friend's raw signal is only ever read by the model, never shown to anyone),
+// owner's friends and ask muse whether they converge. the signals system is the
+// source of truth for what may be matched: only signals their author chose to
+// share, only while they are live, and a plan made from one carries its
+// wait-for count and its expiry. deterministic code owns eligibility (friends
+// only, shared, unexpired, unconsumed, overlapping free time), privacy (a
+// friend's raw signal is only ever read by the model, never shown to anyone),
 // dedupe and state. muse owns the judgment and the invented experience.
 
 export type ConvergeOutcome = {
@@ -23,12 +27,11 @@ export type ConvergeOutcome = {
 
 const MAX_SIGNALS = 8;
 const MAX_UNDERSTAND_ON_DEMAND = 3;
-const WINDOW_DAYS = 7;
 
 const overlaps = (a: FreeWindow[], b: FreeWindow[]) =>
   a.some((x) => b.some((y) => x.day === y.day && x.start < y.end && y.start < x.end));
 
-type MuseRow = { id: string; user_id: string; raw_text: string; understood: unknown; created_at: string; consumed_plan_id: string | null };
+type MuseRow = { id: string; user_id: string; raw_text: string; understood: unknown; created_at: string; consumed_plan_id: string | null; audience: string | null; wait_for: number | null; expires_at: string | null };
 
 export async function convergeOnSignal(museId: string): Promise<ConvergeOutcome> {
   const db = serverDb();
@@ -39,6 +42,11 @@ export async function convergeOnSignal(museId: string): Promise<ConvergeOutcome>
   const trigger = muse as MuseRow | null;
   if (!trigger) return { status: "skipped", summary: "signal not found" };
   if (trigger.consumed_plan_id) return { status: "skipped", summary: "signal already folded into a plan" };
+  // a thought kept between its author and muse never starts a match, and
+  // neither does one that has run out. both are the author's call, recorded
+  // on the signal itself.
+  if (parseAudience(trigger.audience) === "muse") return { status: "skipped", summary: "signal is private to its author and muse" };
+  if (isExpired(trigger.expires_at, new Date())) return { status: "skipped", summary: "signal has expired" };
   const understood = UnderstandSchema.safeParse(trigger.understood);
   if (!understood.success) return { status: "skipped", summary: "signal not understood yet" };
 
@@ -60,16 +68,16 @@ export async function convergeOnSignal(museId: string): Promise<ConvergeOutcome>
   const { data: activePlans } = await db.from("plans").select("muse_id").in("state", ["draft", "proposing", "happening"]);
   const spentMuses = new Set((activePlans ?? []).map((p) => p.muse_id as string));
 
-  const since = new Date(Date.now() - WINDOW_DAYS * 24 * 3600_000).toISOString();
+  const now = new Date();
   const { data: rows } = await db
     .from("muses")
     .select("*")
     .in("user_id", friendIds)
+    .in("audience", ["friends", "mutual"])
     .is("consumed_plan_id", null)
-    .gte("created_at", since)
     .order("created_at", { ascending: false })
     .limit(24);
-  const open = ((rows ?? []) as MuseRow[]).filter((r) => !spentMuses.has(r.id));
+  const open = ((rows ?? []) as MuseRow[]).filter((r) => !spentMuses.has(r.id) && !isExpired(r.expires_at, now));
   if (open.length === 0) return { status: "no_candidates", summary: "no open friend signals" };
 
   const { data: friendRows } = await db.from("users").select("*").in("id", friendIds);
@@ -124,13 +132,22 @@ export async function convergeOnSignal(museId: string): Promise<ConvergeOutcome>
   if (!o.match) return { status: "no_match", summary: `no convergence: closest idea was "${o.activity}"` };
 
   const participantIds = [owner.id, ...o.participants.map((p) => p.user_id)].sort();
-  const topic = topicsFor(o.activity)[0] ?? o.activity.toLowerCase();
-  const dedupeKey = `${participantIds.join(",")}|${topic}`;
-  const { data: dupe } = await db.from("signal_matches").select("id,plan_id").eq("dedupe_key", dedupeKey).limit(1);
-  if (dupe && dupe.length > 0 && dupe[0].plan_id) {
-    const { data: dupePlan } = await db.from("plans").select("state").eq("id", dupe[0].plan_id).maybeSingle();
-    if (dupePlan && ["draft", "proposing", "happening"].includes(dupePlan.state as string)) {
-      return { status: "duplicate", planId: dupe[0].plan_id as string, summary: "this group already has an open plan from converging signals" };
+  // the dedupe unit is the set of signals that converged, not the wording of
+  // the idea: two of those signals landing at the same moment (each firing
+  // its own convergence pass) compute the same key, so only one plan is made.
+  const dedupeKey = `signals:${[trigger.id, ...o.participants.map((p) => p.muse_id)].sort().join(",")}`;
+  // overlap counts too: if any of these signals already folded into an open
+  // convergence plan, a second pass over a slightly different subset must
+  // not invite the same people twice.
+  const myMuses = new Set([trigger.id, ...o.participants.map((p) => p.muse_id)]);
+  const { data: prior } = await db.from("signal_matches").select("dedupe_key,plan_id");
+  for (const row of (prior ?? []) as Array<{ dedupe_key: string; plan_id: string | null }>) {
+    if (!row.plan_id) continue;
+    const ids = String(row.dedupe_key).replace(/^signals:/, "").split(",");
+    if (!ids.some((id) => myMuses.has(id))) continue;
+    const { data: pl } = await db.from("plans").select("state").eq("id", row.plan_id).maybeSingle();
+    if (pl && ["draft", "proposing", "happening"].includes(pl.state as string)) {
+      return { status: "duplicate", planId: row.plan_id, summary: "some of these signals already converged into an open plan" };
     }
   }
 
@@ -148,7 +165,9 @@ export async function convergeOnSignal(museId: string): Promise<ConvergeOutcome>
     group_reason: o.group_reason,
     listings: o.listings,
   };
-  const planId = await createDraftFromMatch(trigger.id, owner.id, matched);
+  // the plan inherits the trigger signal's own terms: how many people its
+  // author is waiting for, and when the offer runs out.
+  const planId = await createDraftFromMatch(trigger.id, owner.id, matched, { waitFor: trigger.wait_for ?? 2, expiresAt: trigger.expires_at ?? null });
 
   const { error: matchErr } = await db.from("signal_matches").insert({
     trigger_muse_id: trigger.id,

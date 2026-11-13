@@ -65,8 +65,8 @@ async function reset() {
 }
 
 /** post a signal exactly like the composer does. returns the muse id. */
-async function postSignal(user: string, text: string): Promise<string> {
-  const r = await sse("/api/muse/understand", user, { text });
+async function postSignal(user: string, text: string, opts: { audience?: string; waitFor?: number; expires?: string } = {}): Promise<string> {
+  const r = await sse("/api/muse/understand", user, { text, audience: opts.audience ?? "friends", waitFor: opts.waitFor, expires: opts.expires });
   if (r.error) throw new Error(`understand as ${user} failed: ${r.error}`);
   const done = r.events.find((e) => e.event === "done")?.data;
   const museId = done?.museId ?? done?.muse_id;
@@ -361,6 +361,117 @@ async function c8_whatIfIsNotACommitment() {
   check(S, "group chat created after the explicit yes", !!threadId, `threadId=${threadId ?? "none after polling"}`);
 }
 
+async function c9_audienceGate() {
+  const S = "C9 signal audiences gate convergence";
+  await reset();
+  // (a) a trigger kept between its author and muse never starts a match.
+  const priv = await postSignal("maya", "i lowkey wanna get into film photography", { audience: "muse" });
+  const { json: out } = await api("POST", "/api/muse/converge", "maya", { museId: priv });
+  check(S, "private trigger is skipped", (out as any)?.status === "skipped", `outcome=${JSON.stringify(out).slice(0, 160)}`);
+  const mayaPlans = await homePlans("maya");
+  check(S, "private trigger made no plan", mayaPlans.length === 0, `plans=${mayaPlans.length}`);
+  // (b) a friend's private signal is never used: sam's seeded signal is
+  // audience 'muse' and film-themed, so a film trigger from maya is the
+  // exact temptation. he must not be invited.
+  const since = nowIso();
+  await postSignal("maya", "quiet film night this friday, just a chill one");
+  await waitForConvergeTrace(since, 1, 150_000);
+  await sleep(10_000);
+  const { data: samRows } = await db.from("plan_members").select("plan_id").eq("user_id", "sam");
+  check(S, "private candidate never invited", (samRows ?? []).length === 0, `sam plan_members rows=${(samRows ?? []).length}`);
+}
+
+async function c10_expiryGate() {
+  const S = "C10 expired signals never converge";
+  await reset();
+  // trigger-side: an expired trigger is skipped, and says why.
+  const m = await postSignal("maya", "sunrise hike sunday, early crew", { expires: "1d" });
+  await db.from("muses").update({ expires_at: new Date(Date.now() - 3_600_000).toISOString() }).eq("id", m);
+  const { json: out } = await api("POST", "/api/muse/converge", "maya", { museId: m });
+  check(S, "expired trigger is skipped", (out as any)?.status === "skipped" && /expired/.test((out as any)?.summary ?? ""), `outcome=${JSON.stringify(out).slice(0, 160)}`);
+  // candidate-side: theo's shared signal is expired before maya posts hers.
+  const tm = await postSignal("theo", "sunrise hike sunday, early, who's in", { expires: "1d" });
+  await db.from("muses").update({ expires_at: new Date(Date.now() - 3_600_000).toISOString() }).eq("id", tm);
+  const since = nowIso();
+  await postSignal("maya", "sunrise hike sunday sounds perfect, early crew");
+  await waitForConvergeTrace(since, 1, 150_000);
+  await sleep(10_000);
+  const { data: theoRows } = await db.from("plan_members").select("plan_id").eq("user_id", "theo");
+  check(S, "expired candidate never invited", (theoRows ?? []).length === 0, `theo plan_members rows=${(theoRows ?? []).length}`);
+}
+
+async function c11_maybeIsNotACommitment() {
+  const S = "C11 a maybe neither commits nor kills";
+  await reset();
+  const museId = await postSignal("ravi", "board game night at mine saturday, who's in");
+  const mm = await sse("/api/muse/match", "ravi", { museId });
+  const planId = (mm.events.find((e) => e.event === "done")?.data?.planId ?? null) as string | null;
+  check(S, "starter plan created", !!planId, `planId=${planId ?? "none"}`);
+  if (!planId) return;
+  await api("POST", `/api/plans/${planId}/send`, "ravi", {});
+  const { json: view0 } = await api("GET", `/api/plans/${planId}`, "ravi");
+  const picks = memberIds(view0);
+  check(S, "dara is the pick", picks.includes("dara"), `picks=${picks.join(",")}`);
+  await api("POST", `/api/plans/${planId}/respond`, "dara", { status: "maybe" });
+  const { data: daraRow } = await db.from("plan_members").select("status").eq("plan_id", planId).eq("user_id", "dara").maybeSingle();
+  check(S, "maybe is recorded as maybe", (daraRow as any)?.status === "maybe", `status=${(daraRow as any)?.status ?? "none"}`);
+  const { json: viewM } = await api("GET", `/api/plans/${planId}`, "ravi");
+  check(S, "maybe leaves the plan open (not real, not faded)", (viewM as any)?.state === "proposing", `state=${(viewM as any)?.state}`);
+  for (const p of picks) await api("POST", `/api/plans/${planId}/respond`, p, { status: "down" });
+  const { json: viewD } = await api("GET", `/api/plans/${planId}`, "ravi");
+  check(S, "explicit yeses after the maybe make it real", (viewD as any)?.state === "happening", `state=${(viewD as any)?.state}`);
+  let threads = 0;
+  for (let i = 0; i < 20; i++) {
+    const { data } = await db.from("threads").select("id").eq("plan_id", planId);
+    threads = (data ?? []).length;
+    if (threads > 0) break;
+    await sleep(3_000);
+  }
+  check(S, "exactly one group chat", threads === 1, `threads=${threads}`);
+}
+
+async function c12_simultaneousTriggers() {
+  const S = "C12 simultaneous signals, one convergence";
+  await reset();
+  const since = nowIso();
+  await Promise.all([
+    postSignal("maya", "i lowkey wanna get into film photography"),
+    postSignal("alex", "finally got a film camera, need an excuse to use it"),
+  ]);
+  await sleep(90_000);
+  const { data: matches } = await db.from("signal_matches").select("id,plan_id,participant_ids");
+  const rows = (matches ?? []) as any[];
+  check(S, "convergence was recorded", rows.length >= 1, `signal_matches=${rows.length}`);
+  const pairPlans = rows.filter((r) => ((r.participant_ids as string[]) ?? []).includes("maya") && ((r.participant_ids as string[]) ?? []).includes("alex"));
+  check(S, "exactly one plan holds both maya and alex", pairPlans.length === 1, `pair plans=${pairPlans.length} of ${rows.length}`);
+  const seen = new Map<string, number>();
+  for (const r of rows) for (const p of (r.participant_ids as string[]) ?? []) seen.set(p, (seen.get(p) ?? 0) + 1);
+  const dupPeople = [...seen.entries()].filter(([, n]) => n > 1).map(([p]) => p);
+  check(S, "nobody is invited to two convergence plans", dupPeople.length === 0, `dupes=${dupPeople.join(",") || "none"}`);
+  const traces = await traceSince(since);
+  const conv = traces.filter((t) => t.job === "converge");
+  check(S, "convergence verdicts are live", conv.length > 0 && conv.every((t) => t.model === "muse-spark-1.3"), `converge rows=${conv.length} models=${[...new Set(conv.map((t) => t.model))].join(",")}`);
+}
+
+async function c13_expandedCatalog() {
+  const S = "C13 convergence on the expanded catalog";
+  await reset();
+  const { count: ev } = await db.from("public_events").select("id", { count: "exact", head: true });
+  const { count: gr } = await db.from("groups").select("id", { count: "exact", head: true });
+  const { count: li } = await db.from("listings").select("id", { count: "exact", head: true });
+  const total = (ev ?? 0) + (gr ?? 0) + (li ?? 0);
+  check(S, "expanded catalog is live", total >= 200, `events=${ev} groups=${gr} listings=${li}`);
+  await postSignal("mina", "i want to try pottery, something chill and crafty");
+  const known = new Set((await homePlans("lena")).map((p) => p.id));
+  await postSignal("lena", "chill crafty sunday, something with my hands");
+  const plan = await waitForNewPlan("lena", known, 150_000);
+  check(S, "pottery convergence formed", !!plan, plan ? `activity=${plan.activity}` : "no plan appeared");
+  if (!plan) return;
+  check(S, "mina is in", memberIds(plan).includes("mina"), `members=${memberIds(plan).join(",")}`);
+  const { data: opps } = await db.from("plan_opportunities").select("kind,ref_id").eq("plan_id", plan.id);
+  check(S, "plan is grounded in the catalog", (opps ?? []).length >= 1, `opportunities=${JSON.stringify(opps ?? [])}`);
+}
+
 const scenarios: Array<[string, () => Promise<void>]> = [
   ["C1", c1_canonical],
   ["C2", c2_sports],
@@ -371,6 +482,11 @@ const scenarios: Array<[string, () => Promise<void>]> = [
   ["C6", c6_selective],
   ["C7", c7_declineAndDedupe],
   ["C8", c8_whatIfIsNotACommitment],
+  ["C9", c9_audienceGate],
+  ["C10", c10_expiryGate],
+  ["C11", c11_maybeIsNotACommitment],
+  ["C12", c12_simultaneousTriggers],
+  ["C13", c13_expandedCatalog],
 ];
 
 const only = process.env.CONVERGE_ONLY?.split(",").map((s) => s.trim()).filter(Boolean);

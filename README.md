@@ -88,7 +88,7 @@ nobody has to start a plan. every understood thought that its author chose to sh
 a convergence arrives as an ordinary proposal, not a formed group: the owner sees muse's reasoning, each friend gets their own private ask, and the same quorum rules decide whether it becomes real. thoughts used by a formed plan are consumed and never re-matched; a plan everyone declines fades like any other, and re-running convergence never duplicates an invitation.
 
 - `web/lib/converge.ts` is the engine (eligibility, dedupe, plan creation through the same draft/send path as a started plan). `web/lib/muse/converge.ts` is the model job; its verdicts are never cached, and a friend's raw thought is never copied into the plan.
-- `pnpm eval:converge` runs the end-to-end scenarios (canonical trio, new topics, both kinds of no-match, selective inclusion, decline/dedupe, and the what-if consent case). `pnpm test:regression` covers the participant id gate (repair only inside the candidate set, everything else fails closed) and makeItReal under concurrent callers (one claim, one chat, one event).
+- `pnpm eval:converge` runs the end-to-end scenarios (canonical trio, new topics, both kinds of no-match, selective inclusion, decline/dedupe, the what-if consent case, and the signals-era gates: private signals never match, expired signals never match, a maybe is not a yes, simultaneous triggers converge once, and grounding in the expanded catalog). `pnpm test:regression` covers the participant id gate (repair only inside the candidate set, everything else fails closed) and makeItReal under concurrent callers (one claim, one chat, one event).
 
 ## seeded facebook opportunity discovery
 
