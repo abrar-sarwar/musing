@@ -18,6 +18,7 @@
     "muse:upload": "node --env-file=.env.hosted.local --import tsx scripts/upload-muse.ts",
     "test:signals": "node --import tsx scripts/signals.test.ts",
     "test:whatif": "node --import tsx scripts/whatif.test.ts",
+    "test:schedule": "node --import tsx scripts/schedule.test.ts",
     "test:recommend": "node --import tsx scripts/recommend.test.ts",
     "eval:muse": "node --env-file=.env.local --import tsx scripts/muse-eval.ts",
     "eval:converge": "node --env-file=.env.local --import tsx scripts/converge-eval.ts"

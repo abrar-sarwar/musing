@@ -1,5 +1,6 @@
 import { serverDb } from "@/lib/db/server";
 import { PlanError } from "@/lib/plans";
+import { refreshWindows } from "@/lib/scheduleStore";
 import type { User } from "@/lib/types";
 import { getActingUserId } from "@/lib/user";
 
@@ -9,7 +10,7 @@ export async function requireUser(): Promise<User> {
   const { data, error } = await serverDb().from("users").select("*").eq("id", id).maybeSingle();
   if (error) throw new Error(error.message);
   if (!data) throw new PlanError("unknown user", 404);
-  return data as User;
+  return refreshWindows(data as User);
 }
 
 export function fail(e: unknown): Response {

@@ -6,13 +6,27 @@ export type FreeWindow = {
   end: string; // "16:00"
 };
 
+// one line of a person's own schedule, as muse read it from their description or as they edited it.
+// free: usually free then. ask: maybe, check with them each time (never counted as free). busy: not then.
+export type ScheduleRule = {
+  id: string;
+  kind: "free" | "ask" | "busy";
+  days: FreeWindow["day"][]; // the weekdays it repeats on. empty = every day inside its dates
+  start: string | null; // "18:00". both null = all day, or no hours given
+  end: string | null;
+  from: string | null; // "2026-11-21", the first day it holds. null = already
+  until: string | null; // the last day it holds. null = no end
+  note: string | null; // a short line for a rule with no hours ("no hours or pattern given")
+};
+
 export type User = {
   id: string;
   name: string;
   avatar_seed: string;
   bio: string | null;
   interests: string[];
-  free_windows: FreeWindow[];
+  free_windows: FreeWindow[]; // what the planner reads. worked out from schedule_rules when those exist
+  schedule_rules: ScheduleRule[] | null; // null = never described: the free windows are all there is
   reels_opt_in: boolean;
   settings: Record<string, unknown>;
 };
@@ -67,6 +81,7 @@ export type Plan = {
   event_id: string | null;
   public_event_id: string | null; // set when the plan is to go to a public event. its time and place are fixed.
   quorum: number;
+  revised_by: string | null; // whose "what if" last changed the plan. never sent to the app as a name
   muse_on: boolean;
   expires_at: string | null; // a plan that is not real by then fades
   created_at: string;
@@ -83,7 +98,7 @@ export type PlanMember = {
   updated_at: string;
 };
 
-export type MuseJob = "understand" | "match" | "coordinate" | "create" | "suggest" | "chat" | "converge";
+export type MuseJob = "understand" | "match" | "coordinate" | "create" | "suggest" | "chat" | "converge" | "schedule";
 
 export type MuseTrace = {
   id: number;
@@ -144,6 +159,9 @@ export type PlanView = {
   id: string;
   state: PlanState;
   version: number;
+  // the last change to this plan came from this viewer's own "what if". all the app learns about
+  // anyone else is that it wasn't them, never who.
+  revisedByMe: boolean;
   solving: boolean;
   museOn: boolean;
   role: "starter" | "member";

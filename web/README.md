@@ -29,6 +29,7 @@ pnpm test:router
 pnpm test:discover
 pnpm test:signals
 pnpm test:whatif
+pnpm test:schedule
 ```
 
-`test:discover` exercises grounded seeded-catalog ranking, `test:signals` covers audience/quorum/expiry rules, and `test:whatif` covers the deterministic plan-specific suggestions. none of these three calls muse.
+`test:discover` exercises grounded seeded-catalog ranking, `test:signals` covers audience/quorum/expiry rules, and `test:whatif` covers the deterministic plan-specific suggestions. `test:schedule` covers how schedule rules become weekly free windows (start and end dates, unavailable time, "ask each time"). none of these calls muse.

@@ -91,6 +91,7 @@ async function buildView(b: Bundle, viewerId: string): Promise<PlanView | null> 
     id: plan.id,
     state: plan.state,
     version: plan.version,
+    revisedByMe: plan.revised_by === viewerId,
     solving: plan.solving,
     museOn: plan.muse_on,
     role: isStarter ? "starter" : "member",
@@ -781,6 +782,7 @@ export async function whatIf(input: WhatIfInput, onText: (delta: string) => void
         where_text: lower(o.where_text),
         note: lower(o.heads_up),
         version: plan.version + (changed ? 1 : 0),
+        ...(changed ? { revised_by: input.userId } : {}),
         solving: false,
         updated_at: now(),
       })

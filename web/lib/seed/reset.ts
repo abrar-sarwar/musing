@@ -29,6 +29,7 @@ export async function resetSeed(db: SupabaseClient): Promise<{ users: number; fr
     bio: u.bio,
     interests: u.interests,
     free_windows: u.free_windows,
+    schedule_rules: null,
     reels_opt_in: u.reels_opt_in,
     settings: {},
   })));
