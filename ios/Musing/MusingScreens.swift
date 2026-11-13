@@ -67,6 +67,7 @@ struct SignalComposer: View {
                 }
                 .foregroundStyle(Muse.text).padding(.horizontal, 10).padding(.vertical, 6).background(Muse.soft, in: Capsule())
             }
+            HalfToggle(options: [("signal", "Create signal"), ("event", "Create event")], selection: $mode, disabled: busy)
             TextField(Copy.composerPlaceholder, text: $text, axis: .vertical)
                 .font(.system(size: 17)).foregroundStyle(FB.text).lineLimit(3...6)
                 .textInputAutocapitalization(.never).disabled(busy).focused($focused)
@@ -76,11 +77,10 @@ struct SignalComposer: View {
                 .overlay(RoundedRectangle(cornerRadius: UI.cardRadius).stroke(focused ? FB.blue.opacity(0.5) : FB.button, lineWidth: 1))
                 .accessibilityIdentifier("signal-text")
 
-            HalfToggle(options: [("signal", "Create signal"), ("event", "Create event")], selection: $mode, disabled: busy)
             if mode == "signal" {
-                OptionRow(label: "Send to", options: [("close", "Close friends"), ("friends", "Friends only"), ("mutual", "Friends of friends")], selection: $audience, disabled: busy)
-                OptionRow(label: "Wait for at least", options: (1...5).map { ($0, peopleCount($0)) }, selection: $waitFor, disabled: busy)
-                OptionRow(label: "Expires after", options: [("1d", "1 day"), ("3d", "3 days"), ("1w", "1 week"), ("2w", "2 weeks")], selection: $expires, disabled: busy)
+                OptionRow(label: "Send to", icon: "person.2", options: [("close", "Close friends"), ("friends", "Friends only"), ("mutual", "Friends of friends")], selection: $audience, disabled: busy)
+                OptionRow(label: "Wait for at least", icon: "person.crop.circle.badge.checkmark", options: (1...5).map { ($0, peopleCount($0)) }, selection: $waitFor, disabled: busy)
+                OptionRow(label: "Expires after", icon: "hourglass", options: [("1d", "1 day"), ("3d", "3 days"), ("1w", "1 week"), ("2w", "2 weeks")], selection: $expires, disabled: busy)
             }
 
             GradientButton(label: phase == .reading ? "Muse is reading" : phase == .mixing ? (mode == "event" ? "Creating the event" : museOn ? "Finding your people" : "Sending") : mode == "event" ? "Create event" : "Send a signal", big: true, busy: busy, disabled: !canSend) { send() }

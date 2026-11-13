@@ -98,6 +98,8 @@ struct SegmentChips: View {
 /// one choice about a signal ("Send to · Friends only"). opens a menu of the options.
 struct OptionRow<Value: Hashable>: View {
     let label: String
+    /// a small symbol before the label
+    var icon: String?
     let options: [(value: Value, label: String)]
     @Binding var selection: Value
     var disabled = false
@@ -109,6 +111,7 @@ struct OptionRow<Value: Hashable>: View {
             }
         } label: {
             HStack(spacing: 8) {
+                if let icon { Image(systemName: icon).font(.system(size: 15, weight: .medium)).foregroundStyle(FB.blue).frame(width: 22) }
                 Text(label).font(UI.body).foregroundStyle(FB.muted)
                 Spacer(minLength: 0)
                 Text(options.first { $0.value == selection }?.label ?? "").font(.system(size: 15, weight: .semibold)).foregroundStyle(FB.blue)
@@ -123,32 +126,27 @@ struct OptionRow<Value: Hashable>: View {
     }
 }
 
-/// a choice between two things, as one bar the width of the screen: each half is a side, and
-/// the chosen side is the highlighted one. tap the other half to switch.
+/// a choice between two things, as two pills side by side across the screen, in the same
+/// style as the tabs at the top: the chosen one is soft blue, the other grey. tap to switch.
 struct HalfToggle<Value: Hashable>: View {
     let options: [(value: Value, label: String)]
     @Binding var selection: Value
     var disabled = false
-    @Namespace private var slide
 
     var body: some View {
-        HStack(spacing: 0) {
+        HStack(spacing: 8) {
             ForEach(options, id: \.value) { o in
                 let on = o.value == selection
-                Button { withAnimation(.easeOut(duration: 0.18)) { selection = o.value } } label: {
-                    Text(o.label).font(.system(size: 15, weight: .semibold)).foregroundStyle(on ? Color.white : FB.blue).lineLimit(1)
-                        .frame(maxWidth: .infinity).frame(height: UI.buttonBig - 8)
-                        .background { if on { RoundedRectangle(cornerRadius: UI.buttonRadius - 3).fill(FB.blue).matchedGeometryEffect(id: "on", in: slide) } }
-                        .contentShape(Rectangle())
+                Button { withAnimation(.easeOut(duration: 0.15)) { selection = o.value } } label: {
+                    Text(o.label).font(.system(size: 14, weight: .semibold)).foregroundStyle(on ? FB.blue : FB.muted).lineLimit(1)
+                        .frame(maxWidth: .infinity).frame(height: 38)
+                        .background(on ? FB.blueSoft : FB.button, in: Capsule())
+                        .overlay(Capsule().stroke(on ? FB.blue.opacity(0.45) : .clear, lineWidth: 1))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(FadePress())
                 .accessibilityAddTraits(on ? .isSelected : [])
             }
         }
-        .padding(4)
-        .frame(height: UI.buttonBig)
-        .background(FB.blueSoft, in: RoundedRectangle(cornerRadius: UI.buttonRadius))
-        .overlay(RoundedRectangle(cornerRadius: UI.buttonRadius).stroke(FB.blue.opacity(0.35), lineWidth: 1))
         .opacity(disabled ? 0.6 : 1)
         .disabled(disabled)
     }

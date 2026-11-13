@@ -172,7 +172,7 @@ verified on the hosted server: reading the rules, one live describe call (the fi
 - **updated plans**: a plan is outlined in red with the bell, and "View plans" shows its red dot, only when someone else's "what if" changed the plan since this person last opened it. a new plan, an answer or a change they asked for themselves is not news. the server records whose "what if" last changed a plan (`plans.revised_by`) and tells each viewer only whether it was them (`revisedByMe`), never who.
 - **view plans order**: updated plans first, then drafts, then everything else, each group soonest first.
 - **calendar**: tapping a day that has a plan on it (any status) lifts that day's plans above the month's list. tapping it again, "Clear" or changing month puts the list back.
-- **create signal or create event** is a two-half toggle the width of the composer, with the chosen side highlighted, instead of a drop-down row.
+- **create signal or create event** is a pair of pills above the text box, in the same style as the tabs at the top, with the chosen one highlighted, instead of a drop-down row. the three signal settings below the box each carry a small icon.
 
 ## product boundaries
 
