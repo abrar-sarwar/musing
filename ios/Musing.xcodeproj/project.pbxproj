@@ -49,8 +49,8 @@
 		486FAEBE1D661DBCF5510D00 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		4A58ED0F113C5D6C6C098F70 /* DraftEditing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DraftEditing.swift; sourceTree = "<group>"; };
 		5604F50B9594968202DDCDFE /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
-		584EFCD5124E34A0BCEC14FD /* Musing.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Musing.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		60FEC8EF34DE38D42D051736 /* MusingUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = MusingUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		584EFCD5124E34A0BCEC14FD /* musing.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = musing.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		60FEC8EF34DE38D42D051736 /* MusingUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MusingUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		6B727CBE52141B1B3B48151A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		81597564723C367725B24983 /* MessagesEvents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessagesEvents.swift; sourceTree = "<group>"; };
 		8313505AAD8B203FF396618B /* HomeScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeScreen.swift; sourceTree = "<group>"; };
@@ -101,7 +101,7 @@
 		6C85C9C7198CA8A9C30D2FC1 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				584EFCD5124E34A0BCEC14FD /* Musing.app */,
+				584EFCD5124E34A0BCEC14FD /* musing.app */,
 				60FEC8EF34DE38D42D051736 /* MusingUITests.xctest */,
 			);
 			name = Products;
@@ -113,6 +113,7 @@
 				681E28E5B4B50C1CE58FB1F1 /* Musing */,
 				97E248E28941A9E3F333A417 /* MusingUITests */,
 				6C85C9C7198CA8A9C30D2FC1 /* Products */,
+				B3E6A1CC30A6E481005B4620 /* Recovered References */,
 			);
 			sourceTree = "<group>";
 		};
@@ -133,12 +134,12 @@
 			path = MusingUITests;
 			sourceTree = "<group>";
 		};
-		"TEMP_9F27D0DB-EE36-475C-AC71-97F50A347E02" /* ios */ = {
+		B3E6A1CC30A6E481005B4620 /* Recovered References */ = {
 			isa = PBXGroup;
 			children = (
 				"TEMP_D34CFB61-5A6A-48DE-81E3-5B2A58E60A76" /* Signing.xcconfig */,
 			);
-			path = ios;
+			name = "Recovered References";
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -178,7 +179,7 @@
 			packageProductDependencies = (
 			);
 			productName = Musing;
-			productReference = 584EFCD5124E34A0BCEC14FD /* Musing.app */;
+			productReference = 584EFCD5124E34A0BCEC14FD /* musing.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -196,7 +197,6 @@
 						TestTargetID = 5C60A2E4FAA6B1C29B2AD4DC;
 					};
 					5C60A2E4FAA6B1C29B2AD4DC = {
-						DevelopmentTeam = "";
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -328,6 +328,7 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 7CUGY6T7UJ;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Musing/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -335,7 +336,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "$(MUSING_BUNDLE_ID)";
+				PRODUCT_BUNDLE_IDENTIFIER = com.musing.ariunbayasgalan;
 				PRODUCT_NAME = musing;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = 1;
@@ -370,6 +371,7 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 7CUGY6T7UJ;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Musing/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -377,7 +379,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "$(MUSING_BUNDLE_ID)";
+				PRODUCT_BUNDLE_IDENTIFIER = com.musing.ariunbayasgalan;
 				PRODUCT_NAME = musing;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = 1;
