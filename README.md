@@ -164,7 +164,7 @@ implemented, server tests run; ios not compiled in this change. needs migration 
 
 ### schedule patterns, plan statuses and the calendar
 
-implemented; the ios app compiles and `pnpm test:schedule` passes. not yet run end to end against a database or a live muse call in this change. needs migration `0011_schedule_rules_and_revised_by.sql`.
+verified on the hosted server: reading the rules, one live describe call (the figma example came back as its four rules) and saving a rule. the ios screens compile and are installed on a phone but have not been checked screen by screen; `pnpm test:schedule` covers the rules. needs migration `0011_schedule_rules_and_revised_by.sql`.
 
 - **describe when you're free**: the availability screen (calendar icon, then "Edit availability") lists a person's schedule patterns and has one button at the bottom, "Describe availability to Muse". they type their routines, unsure days and exceptions in their own words and tap **Submit description**; one muse call (`POST /api/user/availability/describe`, `web/lib/muse/schedule.ts`) reads it into rules and the rules are saved. a later description adds to or changes the rules already there. the description itself is not stored, the answer is never cached or replayed, and the trace line says only how many rules came back. with muse off or on replay the screen says so instead of guessing.
 - **rules**: usually free, ask each time, or unavailable, each with weekdays, optional hours and optional first and last dates (`users.schedule_rules`). the only manual entry is **Edit** on one card, which can change or remove that rule (`PUT /api/user/availability`). a person's rules are served only to them.
