@@ -34,6 +34,7 @@ private struct Bubble: Identifiable {
     let idea: MuseIdea
     let side: CGFloat // -1 left, 1 right
     let born: Date
+    let width: CGFloat // how wide the bubble is, so it can start clear of muse
     let reach: CGFloat // how far out it travels
     let rise: CGFloat // how far up
     let life: Double
@@ -66,6 +67,7 @@ struct MuseCompanion: View {
     /// the plush face for each mood
     private var face: MuseExpression {
         switch state {
+        case .musing: .asleep // dreaming up ideas
         case .mewing: .thinking
         case .mewed: .hype
         case .error: .sad
@@ -247,15 +249,15 @@ struct MuseCompanion: View {
     private func bubbleView(_ b: Bubble, now: Date) -> some View {
         let p = min(1, max(0, now.timeIntervalSince(b.born) / b.life))
         let out = 1 - pow(1 - p, 2.2) // quick away from muse, slowing as it floats
-        // it leaves from muse's side, a little above the middle
-        let x = b.side * (avatar * 0.36 + out * b.reach)
+        // it starts on a ring just outside muse, never behind it, and drifts out from there
+        let x = b.side * (avatar * 0.5 + 6 + b.width / 2 + out * b.reach)
         let y = -avatar * 0.3 - out * b.rise - CGFloat(sin(p * .pi * 2)) * 3
         let grow = min(1, p / 0.12)
         let scale = 0.85 + 0.15 * (1 - pow(1 - grow, 3)) + (grow < 1 ? 0 : 0.02 * CGFloat(sin(p * 9)))
         var alpha = p < 0.08 ? p / 0.08 : p > 0.72 ? max(0, 1 - (p - 0.72) / 0.28) : 1
         if let fadeFrom { alpha *= max(0, 1 - now.timeIntervalSince(fadeFrom) / 0.35) }
         return chip(b.idea)
-            .scaleEffect(scale, anchor: b.side < 0 ? .trailing : .leading)
+            .frame(width: b.width).scaleEffect(scale, anchor: b.side < 0 ? .trailing : .leading)
             .opacity(alpha)
             .offset(x: x, y: y)
             .allowsHitTesting(alpha > 0.4)
@@ -276,15 +278,18 @@ struct MuseCompanion: View {
         while !Task.isCancelled {
             let now = Date()
             bubbles.removeAll { now.timeIntervalSince($0.born) >= $0.life }
-            let all = ideas
+            // the strip beside muse, between its ring and the edge of the screen
+            let strip = UIScreen.main.bounds.width / 2 - UI.margin - avatar * 0.5 - 6
+            let wide = { (i: MuseIdea) in CGFloat(i.label.count) * 7.6 + 26 }
+            // only ideas that fit whole beside muse: nothing is ever half off the screen or hidden behind it
+            let all = ideas.filter { wide($0) <= strip }
             if bubbles.count < 4, !all.isEmpty {
                 let idea = all[nextIdea % all.count]
                 nextIdea += 1
-                // long ones stay closer so they never leave the screen
-                let room = max(20, UIScreen.main.bounds.width / 2 - avatar * 0.42 - CGFloat(idea.label.count) * 7.4 - 44)
+                let w = wide(idea)
                 // each side takes turns between a low path and a high one, so two on one side never sit on each other
                 let high = (nextIdea / 2) % 2 == 0
-                bubbles.append(Bubble(idea: idea, side: nextSide, born: now, reach: min(room, .random(in: 40...80)), rise: high ? .random(in: 52...66) : .random(in: 10...22), life: .random(in: 3.2...4)))
+                bubbles.append(Bubble(idea: idea, side: nextSide, born: now, width: w, reach: .random(in: 0...max(0, min(18, strip - w))), rise: high ? .random(in: 50...64) : .random(in: 4...16), life: .random(in: 3.2...4)))
                 nextSide = -nextSide
             }
             try? await Task.sleep(for: .milliseconds(Int.random(in: 1200...1800)))
