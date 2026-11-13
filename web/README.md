@@ -1,36 +1,29 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# musing web
 
-## Getting Started
+this directory contains the next.js api server, muse orchestration, supabase access and an optional web shell for the musing prototype. every application write goes through these server routes; browser-facing database access is limited to the reads and realtime signals documented in the root readme.
 
-First, run the development server:
+## documentation source of truth
+
+read [`../musing.md`](../musing.md) for product direction and [`../README.md`](../README.md) for verified repository setup, behavior, privacy boundaries and the demo flow. do not treat proposed facebook integrations in the product brief as implemented: current Events, Groups and Marketplace data is seeded and mock.
+
+when documenting work in this directory, label proposed, stretch and mock-only behavior explicitly and verify current implementation claims against the routes, `lib/`, migrations and tests.
+
+## run locally
+
+from the repository root, `./setup.sh` configures the local supabase stack and environment files. then start the server:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
+cd web
 pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+the api and optional web shell run at [http://localhost:3000](http://localhost:3000). if you configure the environment manually, copy `env.example` to `.env.local`, fill in the local supabase values from `supabase status`, and keep all real secrets uncommitted.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## checks
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+pnpm typecheck
+pnpm lint
+pnpm test:leak
+pnpm test:router
+```
