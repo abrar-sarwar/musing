@@ -19,5 +19,14 @@ cloudflared tunnel --no-autoupdate --url http://localhost:3080 2>&1 | while IFS=
   if [ -n "$url" ] && [ -z "$shown" ]; then
     shown=1
     printf '\n  server address for the phones:\n\n      %s\n\n  in the app: profile > wrench icon (Developer) > paste it > Save and test.\n  or open this link on the phone:  musing://developer?server=%s\n  it changes every time this script restarts.\n\n' "$url" "$url"
+    # no typing: scan this with the iphone camera and tap "open in musing."
+    if command -v qrencode >/dev/null; then
+      qrencode -t ANSIUTF8 "musing://developer?server=$url"
+      qr="${TMPDIR:-/tmp}/musing-server-qr.png"
+      qrencode -s 14 -m 3 -o "$qr" "musing://developer?server=$url" && open "$qr"
+      echo "  scan the code with the phone camera. it is also open in Preview for a big screen."
+    else
+      echo "  for a scannable code: brew install qrencode"
+    fi
   fi
 done
