@@ -69,14 +69,15 @@ If you add a route folder under `web/app/api` while `pnpm dev` is running and it
 
 ## how it works
 
-1. **spark + understand.** you type a half-formed thought or start from a seeded inspiration surface. muse reads it and streams one line back. only you and muse see it.
+1. **spark + understand.** you type a half-formed thought or start from a seeded inspiration surface. muse reads it and streams one line back. you choose who the signal is shown to (friends only, friends of friends, or only muse), how many friends it waits for (1 to 5, default 2) and when it expires (1 day to 2 weeks, default 1 week). "only muse" keeps it between you and muse.
+   - **friends' signals.** a signal shared with friends appears under "your friends' signals" with its author, their words and a count of who is in. a friend can tap "i'm into this"; that counts as a yes on the plan, now or once it is sent. the author sees the count move, never who.
 2. **connect (the mix).** the backend finds eligible existing friends first; muse picks 3 or 4 people who fit and drafts a private plan. nothing goes out until you tap "send it".
 3. **explore facebook.** the server searches seeded Events, Groups and Marketplace records and gives muse only grounded candidates that match the thought and timing. these are mock hackathon integrations, not live facebook inventory.
 4. **invite.** each friend gets their own low-pressure line from muse. nobody sees who else was asked.
-5. **coordinate privately.** "i'm down" and "not this time" stay private. everyone sees a count, never the identities behind it. a friend can offer "what if..." in the open or tell muse a private limit; muse re-solves without repeating the private reason.
-6. **commit.** at quorum (2 friends, so 3 people) approved names appear, and muse makes the group chat, plan card and mock event handoff.
+5. **coordinate privately.** "i'm in", "maybe" and "can't make it" stay private. a maybe is visible only to the person who said it and counts neither for nor against the plan. everyone sees a count, never the identities behind it. a friend can offer "what if..." in the open or tell muse a private limit; muse re-solves without repeating the private reason.
+6. **commit.** at quorum (the wait-for number the starter chose, capped at the number of friends asked) approved names appear, and muse makes the group chat, plan card and mock event handoff.
 7. **make something.** an invite poster follows in the background, and the confirmed group can keep coordinating with muse in the chat.
-8. **fade quietly.** if quorum becomes impossible the plan ends without identifying who passed.
+8. **fade quietly.** if quorum becomes impossible, or the signal expires before the plan is real, the plan ends without identifying who passed.
 
 ## seeded facebook opportunity discovery
 
@@ -115,6 +116,7 @@ when a plan reaches quorum its group chat is a real chat: members send messages,
 ## where the privacy rules live
 
 - `web/lib/plans.ts` shapes every plan per viewer (`buildView`). the app never reads `plan_members` directly; migration `0002` removes anon access to it and to `muses`.
+- `web/lib/signals.ts` holds the signal rules that need no database (who may see a signal, wait-for, expiry, what a set of answers adds up to). `cd web && pnpm test:signals` runs its cases. `plans.ts` applies them: `signalsFor` shapes friends' signals per viewer, and `signal_interest` (migration `0006`) has no anon access.
 - `web/lib/muse/match.ts` rejects any user id the backend didn't pass in.
 - `web/lib/muse/leak.ts` + `coordinate.ts` are the private-limit check. `cd web && pnpm test:leak` runs its cases.
 - `web/app/api/overlap/route.ts` + `reels_overlap_top` (sql): opted-in friends only, a count and a topic, silent below 3.

@@ -99,6 +99,7 @@ struct RootView: View {
         case "listing": if let arg { app.path = [.listing(arg)] }
         case "people": if let arg { app.path = [.person(arg)] }
         case "plan": if let arg { app.path = [.musing(compose: false, tab: .plans), .plan(arg)] }
+        case "discover": if let arg { app.path = [.musing(compose: false, tab: .plans), .plan(arg), .discoverTogether(arg)] }
         case "settings": app.path = [.musingSettings]
         case "developer": app.path = [.developer]
         case "groups": app.path = arg.map { [.groups, .group($0)] } ?? [.groups]
