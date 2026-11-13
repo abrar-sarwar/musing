@@ -33,7 +33,7 @@ cd web && pnpm seed                 # first time only, or use "Reset demo data" 
 open ios/Musing.xcodeproj           # pick a simulator or your phone, press run
 ```
 
-the app is a plain xcode project written in swift. it has no package dependencies, so there is nothing to install. the project file is generated from `ios/project.yml`; after adding or removing a swift file run `cd ios && xcodegen generate` (`brew install xcodegen`).
+the app is a plain xcode project written in swift. it has no package dependencies, so there is nothing to install. the shared xcode scheme is named `Musing` and resolves the application build product as `musing.app`, matching `PRODUCT_NAME: musing` in `ios/project.yml`; preserve that casing in generated scheme references. the project file is generated from `ios/project.yml`; after adding or removing a swift file run `cd ios && xcodegen generate` (`brew install xcodegen`).
 
 on a physical phone, localhost is the phone. the build writes this mac's bonjour name (`your-mac.local`) into the app, so the phone reaches the laptop over the usb cable or over home wifi. campus and guest wifi usually block phone-to-laptop traffic, so keep the cable plugged in there. if it picks the wrong address, set it in the app under profile > wrench icon (Developer).
 
@@ -41,7 +41,7 @@ on a physical phone, localhost is the phone. the build writes this mac's bonjour
 
 ## hosted (no laptop)
 
-verified current behavior: the api server runs on vercel at `https://musing-six.vercel.app` (project `musing`, root directory `web`, connected to this repo so a push to `main` deploys production) and the database is a supabase cloud project (`liwwbmkylzycoayfmvkn`, us-east-1) with migrations `0001` to `0005` applied and the demo data seeded. the ios app is still installed from xcode; only the server and database are hosted. the facebook surfaces are the same seeded, mock catalog as local.
+verified current behavior: the api server runs on vercel at `https://musing-six.vercel.app` (project `musing`, root directory `web`, connected to this repo so a push to `main` deploys production) and the database is a supabase cloud project (`liwwbmkylzycoayfmvkn`, us-east-1) with migrations `0001` to `0008` applied and the demo data seeded. the ios app is still installed from xcode; only the server and database are hosted. the facebook surfaces are the same seeded, mock catalog as local.
 
 - **server env (vercel, production):** `MODEL_API_KEY`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `DEMO_SECRET`, `DEMO_PASSCODE`, `ADMIN_TOKEN`. the values are kept in `web/.env.hosted.local` (gitignored) on abrar's mac.
 - **phone:** put `API_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `DEMO_PASSCODE` and `ADMIN_TOKEN` in `ios/.env` and press run in xcode. `ADMIN_TOKEN` is what lets "Reset demo data" and the muse switches through. if a tunnel address was saved under profile > Developer, clear it: that override sends the api and the database to one address, and hosted they are two.
@@ -71,15 +71,24 @@ If you add a route folder under `web/app/api` while `pnpm dev` is running and it
 
 ## how it works
 
-1. **spark + understand.** you type a half-formed thought or start from a seeded inspiration surface. muse reads it and streams one line back. you choose who the signal is shown to (friends only, friends of friends, or only muse), how many friends it waits for (1 to 5, default 2) and when it expires (1 day to 2 weeks, default 1 week). "only muse" keeps it between you and muse.
+1. **spark + understand.** you type a half-formed thought or start from a seeded inspiration surface. muse reads it and streams one line back. you choose who the signal is shown to (close friends, friends only or friends of friends), how many friends it waits for (1 to 5, default 2) and when it expires (1 day to 2 weeks, default 1 week). "Send a signal" makes the thought visible to that audience and has muse draft a plan; it does not send the private asks yet.
    - **friends' signals.** a signal shared with friends appears under "your friends' signals" with its author, their words and a count of who is in. a friend can tap "i'm into this"; that counts as a yes on the plan, now or once it is sent. the author sees the count move, never who.
-2. **connect (the mix).** the backend finds eligible existing friends first; muse picks 3 or 4 people who fit and drafts a private plan. nothing goes out until you tap "Send signal" on the draft and confirm.
+2. **connect (the mix).** the backend finds eligible existing friends first; muse picks 3 or 4 people who fit and drafts a private plan. before anything goes out, the starter can remove a pick, add one of their own friends, ask muse to redo the plan, and choose who sees the signal. nothing goes out until they tap "Send signal" on the draft and confirm; each selected person then gets a private ask.
 3. **explore facebook.** the server searches seeded Events, Groups and Marketplace records and gives muse only grounded candidates that match the thought and timing. these are mock hackathon integrations, not live facebook inventory.
 4. **invite.** each friend gets their own low-pressure line from muse. nobody sees who else was asked.
-5. **coordinate privately.** "i'm in", "maybe" and "can't make it" stay private. a maybe is visible only to the person who said it and counts neither for nor against the plan. everyone sees a count, never the identities behind it. a friend can offer "what if..." in the open or tell muse a private limit; muse re-solves without repeating the private reason.
+5. **coordinate privately.** "i'm in", "maybe" and "can't make it" stay private. a maybe is visible only to the person who said it and counts neither for nor against the plan. everyone sees a count, never the identities behind it. a friend can offer "what if..." in the open or tell muse a private limit; muse re-solves without repeating the private reason. the app offers two or three plan-specific "what if" ideas, but tapping one only fills the box; the person must still explicitly ask muse. and exploring a "what if" never counts as an "i'm in": if the plan changes, the person who asked is asked again, and only an explicit answer commits them.
 6. **commit.** at quorum (the wait-for number the starter chose, capped at the number of friends asked) approved names appear, and muse makes the group chat, plan card and mock event handoff.
 7. **make something.** an invite poster follows in the background, and the confirmed group can keep coordinating with muse in the chat.
 8. **fade quietly.** if quorum becomes impossible, or the signal expires before the plan is real, the plan ends without identifying who passed.
+
+## proactive matching: when separate thoughts line up
+
+nobody has to start a plan. every understood thought that its author chose to share also triggers a convergence check against the shared, unexpired thoughts of that person's existing friends (not already used by a plan, with overlapping free time). a thought kept at "only muse" is never used to match anyone, and neither is one a friend kept private; a close-friends thought is matched only inside the author's close circle, exactly the people it is shown to. a dedicated muse job reads the fresh thought together with the friends' own thoughts and decides whether one shared experience genuinely serves each of them. if it does, muse invents the experience that connects them (three different thoughts in, one plan out: a friend's new film camera, another's vintage markets and a vague "something fun this weekend" became a vintage market photo walk). if the thoughts are unrelated, clash, or share no free time, nothing happens. no plan is forced.
+
+a convergence arrives as an ordinary proposal, not a formed group: the owner sees muse's reasoning, each friend gets their own private ask, and the same quorum rules decide whether it becomes real. thoughts used by a formed plan are consumed and never re-matched; a plan everyone declines fades like any other, and the group that passed on it is not proposed the same group again from leftover signals. re-running convergence never duplicates an invitation.
+
+- `web/lib/converge.ts` is the engine (eligibility, dedupe, plan creation through the same draft/send path as a started plan). `web/lib/muse/converge.ts` is the model job; its verdicts are never cached, and a friend's raw thought is never copied into the plan.
+- `pnpm eval:converge` runs the end-to-end scenarios (canonical trio, new topics, both kinds of no-match, selective inclusion, decline/dedupe, the what-if consent case, and the signals-era gates: private signals never match, expired signals never match, a maybe is not a yes, simultaneous triggers converge once, and grounding in the expanded catalog). `pnpm test:regression` covers the participant id gate (repair only inside the candidate set, everything else fails closed) and makeItReal under concurrent callers (one claim, one chat, one event).
 
 ## seeded facebook opportunity discovery
 
@@ -108,7 +117,7 @@ verified current behavior: the catalog holds 61 public events, 51 groups, 102 ma
 - **people:** a few seeded friends gained interests (basketball, coding, guitar, video games, volunteering, dance) and friday or saturday evening free time so more kinds of thought find a friend. friendships are unchanged.
 
 ```bash
-supabase migration up               # once, adds 0007_catalog_expansion
+supabase migration up               # applies pending migrations through 0008_close_friends
 cd web && pnpm seed                 # wipes the demo state and reloads everything; safe to run again, ids are stable
 cd web && pnpm test:discover        # 57 thoughts through the real search, no database, no muse call
 ```
@@ -138,6 +147,10 @@ verified current behavior on the server (run against the hosted database: add, r
 ### who a signal goes to
 
 verified current behavior on the server; the choice is made on the draft, at the moment of sending: a signal goes to **close friends**, **friends only** or **friends of friends**. "only muse" is no longer a choice. close friends is a flag on a friendship (`friendships.close`, migration `0008`): it is one person's call about another, it is seeded (maya's close friends are alex, jo and sam) and there is no screen to edit it yet. a close-friends signal is shown only to the people its author marked close, and muse picks from them alone. a thought started from a reel is an invite like any other; the text handed over never names who liked the reel. `muse` (nobody) remains as a stored value for retired signals and older builds.
+
+### plan-specific what-if ideas
+
+verified current behavior: an open plan includes two or three deterministic suggestions for its "what if..." box. `web/lib/whatif.ts` builds them from the plan, the viewer's own free time and real area labels from the seeded catalog; it makes no muse call. a plan tied to a public event instead suggests changes that preserve the event's fixed day, time and place, such as meeting beforehand or getting food afterward. tapping a suggestion fills the box but sends nothing until the person taps **ask muse**. `cd web && pnpm test:whatif` covers the rules.
 
 ## product boundaries
 
@@ -176,9 +189,9 @@ when a plan reaches quorum its group chat is a real chat: members send messages,
 ## demo script (two phones, about 90 seconds)
 
 1. phone A is maya, phone B is alex. on A, musing. tab: type "kinda wanna go thrifting this weekend but idk who'd be into it" and send.
-2. A: muse reads it, then the draft appears with who it would ask and why, plus a seeded thrift pop-up and relevant marketplace finds. tap **send it**.
+2. A: muse reads it, then the draft appears with who it would ask and why, plus a seeded thrift pop-up and relevant marketplace finds. adjust the draft if needed, then tap **ask these friends**.
 3. B: the ask is under "for you". tap **i'm down**. A's count moves to 1 of 2 without a name.
-4. B: switch to jo. tap **what if...**, type "sunday instead?", and under **just between us** type a budget. tap **ask muse**. both phones show "muse is reworking it", then the new plan. the budget is never mentioned.
+4. B: switch to jo. tap **what if...**, choose the Sunday suggestion (or type "sunday instead?"), and under **just between us** type a budget. tap **ask muse**. both phones show "muse is reworking it", then the new plan. the budget is never mentioned.
 5. that makes two, so it flips to **it's happening** on both phones: names, the group chat with the plan card, and the mock event handoff.
 6. reels tab: scroll two reels and the friends overlap card slides in.
 7. musing. tab: flip **muse** off and send a thought to show what's left without it.

@@ -1,5 +1,7 @@
 # Figma Signals Redesign Implementation Plan
 
+> **Status note (updated 12 November 2026):** This is the historical implementation plan, not the current behavior checklist. The shipped composer subsequently replaced `Only muse` with `Close friends`; the current choices are `Close friends`, `Friends only`, and `Friends of friends`. See the root [`README.md`](../../../README.md) for verified current behavior and tests.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Rebuild the musing. surface to match the team's Figma (home card, three-tab musing screen, plan page, Discover together) and add the four behaviours the Figma introduces: wait-for count, expiry, a "maybe" answer, and friends' signals.

@@ -351,11 +351,14 @@ export const GROUPS = [
   { id: "local-board-game-nights", name: "local board game nights", description: "Heavy games, light games, and someone who explains the rules twice.", tags: ["games"], area: "Atlanta", cover: "feed/boardgame.jpg", member_count: 876, activity: ["Friday table is open at the cafe on 5th.", "Looking for a fourth for a co-op campaign."] },
   { id: "secondhand-furniture-swaps", name: "secondhand furniture swaps", description: "Give a chair, get a lamp. Room makeovers on almost no money.", tags: ["home"], area: "Atlanta", cover: "market/armchair.jpg", member_count: 1290, activity: ["Before and after: a $40 bedroom.", "Curb alert: bookshelf on the east side."] },
   { id: "atlanta-running-crew", name: "atlanta running crew", description: "Easy miles, three mornings a week. Nobody gets dropped.", tags: ["running"], area: "Atlanta", cover: "story/track.jpg", member_count: 1675, activity: ["Saturday long run, 8am, coffee after.", "New route through the park is open."] },
+  { id: "atlanta-pickleball-club", name: "atlanta pickleball club", description: "Open play most mornings, ladders on Saturdays. Paddles in the bin if you are new.", tags: ["sports"], area: "Atlanta", cover: "reel/pickleball.jpg", member_count: 864, activity: ["Saturday open play, 9am, all levels.", "Beginner clinic filled up in a day last month."] },
+  { id: "quiet-study-rooms", name: "quiet study rooms", description: "A shared calendar of the calmest rooms and cafes around campus, and who is heading where.", tags: ["study"], area: "Midtown", cover: "reel/bookstores.jpg", member_count: 433, activity: ["Sunday hall is booked, third floor.", "Exam week hours are up."] },
 ];
 
 export const GROUP_MEMBERS: Array<[group: string, user: string]> = [
   ["atlanta-vintage-finds", "alex"], ["atlanta-vintage-finds", "jo"], ["weekend-thrift-club", "sam"], ["weekend-thrift-club", "alex"],
   ["campus-photography-walks", "mina"], ["local-board-game-nights", "ravi"], ["secondhand-furniture-swaps", "noor"], ["atlanta-running-crew", "kai"],
+  ["atlanta-pickleball-club", "kai"], ["atlanta-pickleball-club", "cyrus"], ["quiet-study-rooms", "lena"],
 ];
 
 export const PUBLIC_EVENTS = [
@@ -365,6 +368,9 @@ export const PUBLIC_EVENTS = [
   { id: "photo-walk", title: "Reservoir Photography Walk", description: "An easy loop with plenty of stops. Any camera works, phones included.", when_day: "sun", when_time: "14:00", when_text: "sunday at 2", area: "the reservoir", tags: ["photography", "outdoors"], organizer: "Campus Photography Walks", capacity: 25, group_id: "campus-photography-walks", cover: "feed/lake.jpg" },
   { id: "board-game-cafe-night", title: "Board Game Cafe Night", description: "Open tables, 200 games, and staff who will teach you anything on the shelf.", when_day: "sat", when_time: "16:00", when_text: "saturday at 4", area: "5th Street", tags: ["games", "social", "cozy"], organizer: "Local Board Game Nights", capacity: 40, group_id: "local-board-game-nights", cover: "feed/boardgame.jpg" },
   { id: "makers-market", title: "Local Makers Market", description: "Ceramics, prints, plants and food stalls. Good for wandering with no plan.", when_day: "sat", when_time: "11:00", when_text: "saturday at 11", area: "the old rail yard", tags: ["weekend", "home", "food"], organizer: "Rail Yard Markets", capacity: null, group_id: null, cover: "feed/market.jpg" },
+  { id: "pickleball-open-play", title: "Pickleball Open Play", description: "Four courts, paddles to borrow, all levels. Someone will teach you the scoring in five minutes.", when_day: "sat", when_time: "09:00", when_text: "saturday at 9", area: "the rec center", tags: ["sports"], organizer: "Atlanta Pickleball Club", capacity: 24, group_id: "atlanta-pickleball-club", cover: "reel/pickleball.jpg" },
+  { id: "indie-gig-night", title: "Indie Gig Night", description: "Three local bands, one small room. Cheap at the door, done by eleven.", when_day: "fri", when_time: "20:00", when_text: "friday at 8", area: "Little Five Points", tags: ["music"], organizer: "Spin Cycle Collective", capacity: null, group_id: null, cover: "reel/concerts.jpg" },
+  { id: "community-cooking-class", title: "Community Cooking Class", description: "Handmade noodles this week. You cook, you eat, you take leftovers home.", when_day: "sun", when_time: "10:00", when_text: "sunday at 10", area: "the community kitchen", tags: ["food"], organizer: "Rail Yard Markets", capacity: 16, group_id: null, cover: "reel/cooking.jpg" },
 ];
 
 // same ids as the app's marketplace photos (ios/Musing/MockData.swift)
@@ -398,6 +404,8 @@ export const LISTINGS = [
 // private (audience "muse") and must never show for anyone but sam. jo's goes to close friends only.
 const daysAhead = (n: number) => new Date(Date.now() + n * 86_400_000).toISOString();
 export const FRIEND_SIGNALS: Array<{ key: string; user_id: string; raw_text: string; audience: "close" | "friends" | "mutual" | "muse"; wait_for: number; created_at: string; expires_at: string; interested: string[] }> = [
+  { key: "alex-weekend", user_id: "alex", raw_text: "need something fun to do this weekend", audience: "friends", wait_for: 2, created_at: daysAgo(1), expires_at: daysAhead(6), interested: [] },
+  { key: "jo-vintage", user_id: "jo", raw_text: "i've been wanting to explore some vintage markets", audience: "friends", wait_for: 2, created_at: daysAgo(2), expires_at: daysAhead(5), interested: [] },
   { key: "alex-records", user_id: "alex", raw_text: "lowkey wanna dig through a record store this weekend", audience: "friends", wait_for: 2, created_at: daysAgo(1), expires_at: daysAhead(6), interested: ["sam"] },
   { key: "jo-ramen", user_id: "jo", raw_text: "anyone down for late night ramen", audience: "close", wait_for: 3, created_at: hoursAgo(5), expires_at: daysAhead(2), interested: ["alex", "sam"] },
   { key: "priya-climbing", user_id: "priya", raw_text: "want to try that new climbing gym", audience: "friends", wait_for: 2, created_at: daysAgo(2), expires_at: daysAhead(12), interested: [] },

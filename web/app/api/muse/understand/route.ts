@@ -1,3 +1,5 @@
+import { after } from "next/server";
+import { convergeOnSignal } from "@/lib/converge";
 import { serverDb } from "@/lib/db/server";
 import { describeContext, validContext } from "@/lib/discover";
 import { fail, requireUser } from "@/lib/http";
@@ -36,6 +38,18 @@ export async function POST(req: Request) {
       expires_at: expiresAt(body.expires, new Date()),
     }).select("id").single();
     if (error || !muse) throw new Error(error?.message ?? "insert failed");
+
+    // once this signal is understood and stored, check whether it converges with
+    // open signals from this person's friends. runs after the response, so the
+    // composer never waits on it, and a failure here never breaks posting a signal.
+    after(async () => {
+      try {
+        const out = await convergeOnSignal(muse.id as string);
+        if (out.status === "matched") console.log(`converge: ${out.summary}`);
+      } catch (e) {
+        console.error("converge failed:", e instanceof Error ? e.message : e);
+      }
+    });
 
     return sseResponse(async (send) => {
       send("muse", { museId: muse.id });

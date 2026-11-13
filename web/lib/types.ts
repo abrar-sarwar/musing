@@ -83,7 +83,7 @@ export type PlanMember = {
   updated_at: string;
 };
 
-export type MuseJob = "understand" | "match" | "coordinate" | "create" | "suggest" | "chat";
+export type MuseJob = "understand" | "match" | "coordinate" | "create" | "suggest" | "chat" | "converge";
 
 export type MuseTrace = {
   id: number;
