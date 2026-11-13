@@ -78,3 +78,15 @@ extension AppState {
         return Mock.listings + more
     }
 }
+
+// an sf symbol by name, except "muse", which is the plush face. keeps sparkles out of anything that stands for muse.
+struct Glyph: View {
+    let name: String
+    var size: CGFloat = 14
+    var weight: Font.Weight = .regular
+
+    var body: some View {
+        if name == "muse" { MuseFace(expression: .awake, size: size * 1.9) }
+        else { Image(systemName: name).font(.system(size: size, weight: weight)) }
+    }
+}

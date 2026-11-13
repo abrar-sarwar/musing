@@ -234,7 +234,7 @@ struct EventDetailScreen: View {
                             Rectangle().fill(Muse.gradient).aspectRatio(16 / 9, contentMode: .fit)
                                 .overlay {
                                     VStack(spacing: 6) {
-                                        Image(systemName: ev.planId == nil ? "calendar" : "sparkles").font(.system(size: 42))
+                                        Glyph(name: ev.planId == nil ? "calendar" : "muse", size: 42)
                                         if ev.planId != nil { Text("made with musing.").font(.system(size: 13, weight: .semibold)) }
                                     }
                                     .foregroundStyle(.white.opacity(0.9))

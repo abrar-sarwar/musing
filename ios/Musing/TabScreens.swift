@@ -185,7 +185,7 @@ struct ReelsScreen: View {
                                 app.makeAMove(item.pitch ?? "this could be us: \(item.topic)", from: SignalContext(kind: "reel", id: catalogId, title: "a reel about \(item.topic)"))
                             } label: {
                                 HStack(spacing: 6) {
-                                    Image(systemName: "sparkles").font(.system(size: 12, weight: .bold))
+                                    MuseFace(expression: .awake, size: 20)
                                     Text("this could be us").font(.system(size: 14.5, weight: .bold))
                                 }
                                 .foregroundStyle(Muse.text).padding(.vertical, 8).padding(.horizontal, 12)
@@ -309,7 +309,7 @@ struct FriendsLikedCard: View {
                     app.makeAMove(reel.pitch ?? "this could be us: \(reel.topic)", from: SignalContext(kind: "reel", id: reel.topic, title: "a reel about \(reel.topic)"))
                 } label: {
                     HStack(spacing: 4) {
-                        Image(systemName: "sparkles").font(.system(size: 12, weight: .bold))
+                        MuseFace(expression: .awake, size: 20)
                         Text("this could be us").font(.system(size: 14.5, weight: .bold))
                     }
                     .foregroundStyle(Muse.text)
@@ -338,7 +338,7 @@ struct OverlapCard: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Circle().fill(Muse.soft).frame(width: 30, height: 30).overlay(Image(systemName: "sparkles").font(.system(size: 13, weight: .bold)).foregroundStyle(Muse.text))
+            MuseFace(expression: .awake, size: 30)
             VStack(alignment: .leading, spacing: 2) {
                 Text("wait... some of your friends are into \(overlap.topic) too").font(.system(size: 14.5, weight: .semibold)).foregroundStyle(Color(hex: 0x1c1e21))
                 Button {
@@ -696,7 +696,7 @@ func musingRows(_ home: MusingHome?, me: String) -> [NoteRow] {
     guard let home else { return [] }
     var rows: [NoteRow] = []
     func add(_ p: PlanView, _ key: String, _ parts: [Mock.Part], _ who: NoteRow.Who, unread: Bool = true) {
-        rows.append(NoteRow(id: "m-\(p.id)-\(key)", parts: parts, age: "now", unread: unread, badge: ("sparkles", Muse.start), who: who, go: .plan(p.id)))
+        rows.append(NoteRow(id: "m-\(p.id)-\(key)", parts: parts, age: "now", unread: unread, badge: ("muse", Muse.start), who: who, go: .plan(p.id)))
     }
     typealias P = Mock.Part
     for p in home.asks {
@@ -751,7 +751,7 @@ struct NotificationsScreen: View {
                                 avatar(item.who)
                                     .overlay(alignment: .bottomTrailing) {
                                         Circle().fill(item.badge.color).frame(width: 28, height: 28)
-                                            .overlay(Image(systemName: item.badge.icon).font(.system(size: 12, weight: .semibold)).foregroundStyle(.white))
+                                            .overlay(Glyph(name: item.badge.icon, size: 12, weight: .semibold).foregroundStyle(.white))
                                             .overlay(Circle().stroke(Color.white, lineWidth: 2)).offset(x: 4, y: 2)
                                     }
                                 richText(item.parts, size: 15.5, trailing: " " + item.age).lineLimit(4).multilineTextAlignment(.leading)

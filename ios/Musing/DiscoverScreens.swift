@@ -12,7 +12,7 @@ struct MoveFromThis: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 10) {
-                Image(systemName: "sparkles").font(.system(size: 14, weight: .bold)).foregroundStyle(Muse.start)
+                MuseFace(expression: .awake, size: 26)
                 VStack(alignment: .leading, spacing: 1) {
                     Text("make a move from this").font(.system(size: 15, weight: .bold)).foregroundStyle(FB.text)
                     Text(sub).font(.system(size: 12.5)).foregroundStyle(FB.muted).multilineTextAlignment(.leading)

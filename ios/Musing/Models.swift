@@ -93,6 +93,7 @@ struct PlanView: Decodable, Identifiable {
     let whatIfs: [String]?
     /// muse's picks the starter left off a draft, with muse's reason. starter, draft only
     let skipped: [Pick]?
+    let updatedAt: String?
 }
 
 /// a friend the starter could still add to a draft, within the signal's audience

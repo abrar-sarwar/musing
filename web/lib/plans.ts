@@ -431,10 +431,43 @@ export async function createPoll(starterId: string, text: string, opts: SignalOp
 
 // ---------- starter actions ----------
 
-export async function sendPlan(planId: string, userId: string): Promise<Settled> {
+/** what the starter chose on the draft: who sees the signal, how many it waits for, when it runs out */
+export type SendChoices = { audience: Audience; waitFor: number; expiresAt: string };
+
+// a draft is private while it is a draft. the choices made on it are written here, in the
+// same step that sends it, so nothing is ever shared before the starter says so.
+async function applyChoices(planId: string, userId: string, c: SendChoices): Promise<void> {
+  const db = serverDb();
+  const { data: plan } = await db.from("plans").select("id,muse_id,state").eq("id", planId).eq("starter_id", userId).maybeSingle();
+  if (!plan || plan.state !== "draft") throw new PlanError("nothing to send", 409);
+  // a signal that goes out is shown to someone: private is a state of the draft, not a choice
+  const audience: Audience = c.audience === "muse" ? "friends" : c.audience;
+  const { data: members } = await db.from("plan_members").select("user_id").eq("plan_id", planId);
+  let asked = (members ?? []).map((m) => m.user_id as string);
+  if (audience === "close") {
+    // a close-friends signal only asks close friends, whoever muse or the starter put on the draft
+    const { data: edges } = await db.from("friendships").select("friend_id").eq("user_id", userId).eq("close", true);
+    const close = new Set((edges ?? []).map((e) => e.friend_id as string));
+    const keep = asked.filter((id) => close.has(id));
+    if (keep.length === 0) throw new PlanError("nobody on this draft is one of your close friends. add one, or send it to friends instead.", 409);
+    const drop = asked.filter((id) => !close.has(id));
+    if (drop.length > 0) {
+      const { error } = await db.from("plan_members").delete().eq("plan_id", planId).in("user_id", drop);
+      if (error) throw new Error(`send: ${error.message}`);
+    }
+    asked = keep;
+  }
+  const { error: e1 } = await db.from("muses").update({ audience, wait_for: c.waitFor, expires_at: c.expiresAt }).eq("id", plan.muse_id as string).eq("user_id", userId);
+  if (e1) throw new Error(`send: ${e1.message}`);
+  const { error: e2 } = await db.from("plans").update({ quorum: quorumFor(c.waitFor, asked.length), expires_at: c.expiresAt }).eq("id", planId).eq("state", "draft");
+  if (e2) throw new Error(`send: ${e2.message}`);
+}
+
+export async function sendPlan(planId: string, userId: string, choices?: SendChoices): Promise<Settled> {
   const db = serverDb();
   // loading it first fades a draft whose signal already ran out, so it cannot be sent
   await loadBundle(planId);
+  if (choices) await applyChoices(planId, userId, choices);
   const { data, error } = await db
     .from("plans")
     .update({ state: "proposing", updated_at: new Date().toISOString() })

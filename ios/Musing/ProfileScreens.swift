@@ -433,7 +433,7 @@ struct MenuScreen: View {
                         tile("calendar", "Events", FB.red) { app.push(.events) }
                         tile("clock", "Memories", FB.blue) { app.go(.profile) }
                         tile("bookmark.fill", "Saved", Color(hex: 0xa033ff)) { toast("Nothing saved yet. Save a reel or a listing.") }
-                        tile("sparkles", "musing.", Muse.start) { app.push(.musing(compose: false)) }
+                        tile("muse", "musing.", Muse.start) { app.push(.musing(compose: false)) }
                     }
 
                     title("Prototype")
@@ -490,7 +490,7 @@ struct MenuScreen: View {
     private func tile(_ icon: String, _ label: String, _ color: Color, _ action: @escaping () -> Void) -> some View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 8) {
-                Image(systemName: icon).font(.system(size: 23)).foregroundStyle(color).frame(height: 28)
+                Glyph(name: icon, size: 23).foregroundStyle(color).frame(height: 28)
                 Text(label).font(.system(size: 16, weight: .semibold)).foregroundStyle(FB.text)
             }
             .frame(maxWidth: .infinity, alignment: .leading).padding(14)

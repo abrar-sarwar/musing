@@ -75,7 +75,7 @@ enum Copy {
     static let happening = "It's happening"
     static let runItBack = "Run it back"
     // the draft's own step: the signal is already out, this sends muse's private ask to each person picked
-    static let sendIt = "Ask these friends"
+    static let sendIt = "Send signal"
     static let notThis = "Not this"
     static let pass = "Can't make it"
     static let solving = "muse is reworking it"
