@@ -39,6 +39,8 @@ export type Candidate = {
   free_windows: FreeWindow[];
   /** only present when this friend opted in to sharing reels topics */
   reelsTopics: string[] | null;
+  /** set for someone who is not a friend yet: how many friends they share with the starter */
+  mutuals?: number;
 };
 
 export type MatchInput = {
@@ -95,8 +97,13 @@ things found around this thought. the backend searched public events, groups and
 function userPrompt(i: MatchInput): string {
   const lines = i.candidates.map((c) => {
     const reels = c.reelsTopics && c.reelsTopics.length > 0 ? ` | lately into: ${c.reelsTopics.join(", ")}` : "";
-    return `- ${c.id} (${c.firstName}) | interests: ${c.interests.join(", ")} | free: ${windowsLine(c.free_windows)}${reels}`;
+    const mutual = c.mutuals ? ` | mutual friend, not a friend yet: ${c.mutuals} friend${c.mutuals === 1 ? "" : "s"} in common` : "";
+    return `- ${c.id} (${c.firstName}) | interests: ${c.interests.join(", ")} | free: ${windowsLine(c.free_windows)}${reels}${mutual}`;
   });
+  // only said when the starter opened the plan up to mutual friends
+  const mutualRule = i.candidates.some((c) => c.mutuals)
+    ? `\nthe starter opened this up to mutual friends. friends come first: include a mutual friend only when they clearly fit and are free, and never more than two. in a mutual friend's personal_ask, say you have friends in common. never name those friends.\n`
+    : "";
   return `today is ${i.today}.
 starter: ${i.starter.firstName} | interests: ${i.starter.interests.join(", ")} | free: ${windowsLine(i.starter.free_windows)}
 they typed: "${i.rawText}"
@@ -104,7 +111,7 @@ what you understood: activity=${i.understood.activity}; time=${i.understood.time
 
 candidate friends:
 ${lines.join("\n")}
-
+${mutualRule}
 ${i.startedFrom ? `where this started: ${i.startedFrom}\n\n` : ""}public events found:
 ${i.found.events.map((e) => `- ${e.id} | ${e.title} | ${e.when_day} ${e.when_time} (${e.when_text}) | ${e.area} | ${e.description}`).join("\n") || "- none"}
 

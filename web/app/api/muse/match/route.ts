@@ -10,11 +10,15 @@ import { firstName } from "@/lib/time";
 import type { User } from "@/lib/types";
 import { isFreeAt, todayLine } from "@/lib/when";
 
-// the mix. POST { museId } -> sse: "delta" {text}..., "done" {planId, source, latencyMs}
+const MAX_MUTUALS = 8;
+
+// the mix. POST { museId, audience? } -> sse: "delta" {text}..., "done" {planId, source, latencyMs}
 // the plan it makes is a draft: only the starter sees it until they send it.
 export async function POST(req: Request) {
   try {
-    const body = (await req.json().catch(() => ({}))) as { museId?: unknown };
+    const body = (await req.json().catch(() => ({}))) as { museId?: unknown; audience?: unknown };
+    // who muse may ask: friends (the default), or friends plus people who share a friend
+    const audience = body.audience === "mutual" ? "mutual" : "friends";
     const museId = typeof body.museId === "string" ? body.museId : "";
     const user = await requireUser();
     const settings = await getSettings();
@@ -29,17 +33,32 @@ export async function POST(req: Request) {
     const { data: edges } = await db.from("friendships").select("friend_id").eq("user_id", user.id);
     const friendIds = (edges ?? []).map((e) => e.friend_id as string);
     if (friendIds.length < 1) return Response.json({ ok: false, error: "not enough friends in the mock data for this person" }, { status: 409 });
+    // mutual friends: one hop out. only a count of friends in common is kept, never which friends.
+    const mutualCount = new Map<string, number>();
+    if (audience === "mutual") {
+      const { data: hops } = await db.from("friendships").select("friend_id").in("user_id", friendIds);
+      const known = new Set([user.id, ...friendIds]);
+      for (const h of hops ?? []) {
+        const id = h.friend_id as string;
+        if (!known.has(id)) mutualCount.set(id, (mutualCount.get(id) ?? 0) + 1);
+      }
+    }
+    // the best connected few, so the prompt stays small
+    const mutualIds = [...mutualCount.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, MAX_MUTUALS).map(([id]) => id);
+    const poolIds = [...friendIds, ...mutualIds];
     const [{ data: friends }, { data: topics }] = await Promise.all([
-      db.from("users").select("*").in("id", friendIds),
+      db.from("users").select("*").in("id", poolIds),
+      // reels topics are a friends-only signal. a mutual friend's are never read.
       db.from("reels_topics").select("user_id,topic,score").in("user_id", friendIds).order("score", { ascending: false }),
     ]);
     const candidates: Candidate[] = ((friends ?? []) as User[]).map((f) => ({
+      ...(mutualCount.has(f.id) ? { mutuals: mutualCount.get(f.id) } : {}),
       id: f.id,
       firstName: firstName(f.name).toLowerCase(),
       interests: f.interests,
       free_windows: f.free_windows,
       // reels topics are only an input for friends who opted in
-      reelsTopics: f.reels_opt_in ? (topics ?? []).filter((t) => t.user_id === f.id).map((t) => t.topic as string) : null,
+      reelsTopics: f.reels_opt_in && !mutualCount.has(f.id) ? (topics ?? []).filter((t) => t.user_id === f.id).map((t) => t.topic as string) : null,
     }));
 
     // discovery: fast server-side search before muse is called. muse chooses among these.

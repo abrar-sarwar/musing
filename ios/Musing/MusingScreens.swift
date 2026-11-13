@@ -148,6 +148,8 @@ struct SignalComposer: View {
     @State private var error: String?
     @State private var work: Task<Void, Never>?
     @State private var pickerOpen = false
+    /// who muse may ask for this thought: "friends" or "mutual"
+    @State private var audience = "friends"
     @State private var context: SignalContext?
     @State private var foundLine: String?
     @FocusState private var focused: Bool
@@ -175,13 +177,13 @@ struct SignalComposer: View {
                 if museOn {
                     Button { pickerOpen = true } label: {
                         HStack(spacing: 4) {
-                            Image(systemName: "person.2").font(.system(size: 12))
-                            Text("just friends").font(.system(size: 13))
+                            Image(systemName: audience == "mutual" ? "person.3" : "person.2").font(.system(size: 12))
+                            Text(audience == "mutual" ? "mutual friends" : "friends").font(.system(size: 13))
                             Image(systemName: "chevron.down").font(.system(size: 10))
                         }
                         .foregroundStyle(FB.muted).padding(.horizontal, 10).padding(.vertical, 7).background(FB.input, in: Capsule())
                     }
-                    .accessibilityLabel("who muse can ask: just friends")
+                    .accessibilityLabel("who muse can ask: \(audience == "mutual" ? "friends and mutual friends" : "friends")")
                 } else {
                     Text("muse is off · plain poll").font(.system(size: 13)).foregroundStyle(FB.muted)
                 }
@@ -230,7 +232,7 @@ struct SignalComposer: View {
         // a thought handed over from the reels card, a recap or muse's suggestion
         .onChange(of: app.handoff) { takeHandoff() }
         .onDisappear { work?.cancel() }
-        .sheet(isPresented: $pickerOpen) { VisibilitySheet().presentationDetents([.height(330)]) }
+        .sheet(isPresented: $pickerOpen) { VisibilitySheet(audience: $audience).presentationDetents([.height(270)]) }
     }
 
     private func tag(_ t: String, muted: Bool = false) -> some View {
@@ -271,7 +273,7 @@ struct SignalComposer: View {
         pitch = ""
         var planId: String?
         var streamError: String?
-        try await API.stream("/api/muse/match", user: app.userId, body: ["museId": museId]) { event, data in
+        try await API.stream("/api/muse/match", user: app.userId, body: ["museId": museId, "audience": audience]) { event, data in
             switch event {
             case "found":
                 // what the server searched before muse started choosing
@@ -349,32 +351,36 @@ struct SignalComposer: View {
     }
 }
 
-// who muse may ask. only "just friends" is wired in this prototype.
+// who muse may ask: your friends, or your friends plus people you share a friend with.
 struct VisibilitySheet: View {
     @Environment(\.dismiss) private var dismiss
-    private let options: [(label: String, sub: String, icon: String, ready: Bool)] = [
-        ("just friends", "muse picks from your friends. only the few it asks ever know.", "person.2", true),
-        ("close friends", "a shorter list you choose. soon.", "heart", false),
-        ("friends of friends", "one hop out, for bigger plans. soon.", "point.3.connected.trianglepath.dotted", false),
+    @Binding var audience: String
+    private let options: [(id: String, label: String, sub: String, icon: String)] = [
+        ("friends", "friends", "muse picks from your friends. only the few it asks ever know.", "person.2"),
+        ("mutual", "mutual friends", "your friends, plus people you share friends with. good for bigger plans.", "person.3"),
     ]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("who can muse ask?").font(.system(size: 18, weight: .bold)).foregroundStyle(FB.text).padding(.bottom, 6)
-            ForEach(options, id: \.label) { o in
-                Button { if o.ready { dismiss() } } label: {
+            ForEach(options, id: \.id) { o in
+                let on = audience == o.id
+                Button {
+                    audience = o.id
+                    dismiss()
+                } label: {
                     HStack(spacing: 12) {
-                        Circle().fill(Muse.soft).frame(width: 36, height: 36).overlay(Image(systemName: o.icon).font(.system(size: 15)).foregroundStyle(o.ready ? Muse.text : FB.muted))
+                        Circle().fill(Muse.soft).frame(width: 36, height: 36).overlay(Image(systemName: o.icon).font(.system(size: 15)).foregroundStyle(on ? Muse.text : FB.muted))
                         VStack(alignment: .leading, spacing: 0) {
                             Text(o.label).font(.system(size: 16, weight: .semibold)).foregroundStyle(FB.text)
                             Text(o.sub).font(.system(size: 13)).foregroundStyle(FB.muted).multilineTextAlignment(.leading)
                         }
                         Spacer(minLength: 0)
-                        if o.ready { Image(systemName: "checkmark.circle.fill").font(.system(size: 20)).foregroundStyle(Muse.text) }
+                        if on { Image(systemName: "checkmark.circle.fill").font(.system(size: 20)).foregroundStyle(Muse.text) }
                     }
-                    .padding(.vertical, 10).opacity(o.ready ? 1 : 0.45)
+                    .padding(.vertical, 10)
                 }
-                .buttonStyle(FadePress()).disabled(!o.ready)
+                .buttonStyle(FadePress())
             }
             Spacer(minLength: 0)
         }
