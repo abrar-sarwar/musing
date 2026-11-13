@@ -27,7 +27,7 @@ export type Muse = {
   raw_text: string;
   understood: Understood | null;
   visibility: "just_friends";
-  audience: "friends" | "mutual" | "muse"; // who the signal is shown to. muse = nobody but muse
+  audience: "close" | "friends" | "mutual" | "muse"; // who the signal is shown to. muse = nobody but muse
   wait_for: number; // how many friends have to be in
   expires_at: string | null;
   created_at: string;
@@ -158,6 +158,8 @@ export type PlanView = {
   waitFor: number; // the same number, as the starter chose it
   expiresAt: string | null;
   completed: boolean; // it happened: it's real and its start time has passed
+  // ideas for the "what if..." box, built from this plan and this viewer's free time. empty unless the plan is open.
+  whatIfs: string[];
   invited: number;
   downCount: number;
   picks: Array<{ user: Person; reason: string | null }> | null; // starter only
@@ -192,7 +194,7 @@ export type SignalView = {
   text: string;
   createdAt: string;
   expiresAt: string | null;
-  audience: "friends" | "mutual" | "muse";
+  audience: "close" | "friends" | "mutual" | "muse";
   waitFor: number;
   mine: boolean;
   planId: string | null; // only for the author, or someone already on the plan

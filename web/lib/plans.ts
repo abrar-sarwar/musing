@@ -1,5 +1,5 @@
 import { serverDb } from "@/lib/db/server";
-import { planOpportunities } from "@/lib/discover";
+import { catalog, planOpportunities } from "@/lib/discover";
 import { coordinate } from "@/lib/muse/coordinate";
 import { create } from "@/lib/muse/create";
 import type { Matched } from "@/lib/muse/match";
@@ -8,6 +8,7 @@ import { getSettings } from "@/lib/settings";
 import { firstName } from "@/lib/time";
 import { canSeeSignal, isExpired, outcome, parseAudience, quorumFor, type Audience } from "@/lib/signals";
 import type { MemberStatus, Muse, MusingHome, Person, Plan, PlanMember, PlanView, SignalView, User } from "@/lib/types";
+import { suggestWhatIfs, usableAreas } from "@/lib/whatif";
 import { isDay, isFreeAt, isTime, nextOccurrence, todayLine } from "@/lib/when";
 
 // the plan engine. every rule about who may see what lives in this file.
@@ -104,6 +105,7 @@ async function buildView(b: Bundle, viewerId: string): Promise<PlanView | null> 
     waitFor: plan.quorum,
     expiresAt: plan.expires_at ?? null,
     completed,
+    whatIfs: plan.state === "proposing" && plan.muse_on ? await whatIfsFor(plan, users.get(viewerId) ?? null) : [],
     invited: members.length,
     downCount: down.length,
     // the starter sees who muse picked and why. never who answered what. someone who
@@ -124,6 +126,33 @@ async function buildView(b: Bundle, viewerId: string): Promise<PlanView | null> 
     opportunities: await planOpportunities(plan.id),
     updatedAt: plan.updated_at,
   };
+}
+
+// what this person could ask to change, from the plan and their own free time. the areas
+// come from the catalog (the city is whatever most listings say), so a place offered is a real one.
+async function whatIfsFor(plan: Plan, viewer: User | null): Promise<string[]> {
+  let areas: string[] = [];
+  try {
+    const c = await catalog();
+    const cities = new Map<string, number>();
+    for (const l of c.listings) {
+      const city = l.place.split(",")[0].trim();
+      cities.set(city, (cities.get(city) ?? 0) + 1);
+    }
+    const city = [...cities.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+    areas = usableAreas([...c.events.map((e) => e.area), ...c.groups.map((g) => g.area)], city);
+  } catch {
+    // no catalog: the ideas still work, just without a named area
+  }
+  return suggestWhatIfs({
+    planId: plan.id,
+    day: isDay(plan.when_day) ? plan.when_day : null,
+    time: isTime(plan.when_time) ? plan.when_time : null,
+    where: plan.where_text,
+    fixed: Boolean(plan.public_event_id),
+    viewerFree: viewer?.free_windows ?? [],
+    areas,
+  });
 }
 
 export async function getPlanView(planId: string, viewerId: string): Promise<PlanView> {
@@ -174,10 +203,14 @@ async function friendIdsOf(userId: string): Promise<string[]> {
 }
 
 // how the viewer stands to an author: a friend, someone who shares a friend, or nobody
-async function relationTo(viewerId: string, authorId: string): Promise<"self" | "friend" | "mutual" | "none"> {
+async function relationTo(viewerId: string, authorId: string): Promise<"self" | "close" | "friend" | "mutual" | "none"> {
   if (viewerId === authorId) return "self";
   const mine = await friendIdsOf(viewerId);
-  if (mine.includes(authorId)) return "friend";
+  if (mine.includes(authorId)) {
+    // close is the author's call: do they count the viewer as a close friend?
+    const { data: edge } = await serverDb().from("friendships").select("close").eq("user_id", authorId).eq("friend_id", viewerId).maybeSingle();
+    return edge?.close ? "close" : "friend";
+  }
   if (mine.length === 0) return "none";
   const { data } = await serverDb().from("friendships").select("user_id").in("user_id", mine).eq("friend_id", authorId).limit(1);
   return data && data.length > 0 ? "mutual" : "none";
@@ -205,13 +238,19 @@ async function signalsFor(viewerId: string, own: Muse[]): Promise<{ signals: Sig
     const { data: hops } = await db.from("friendships").select("friend_id").in("user_id", friends);
     const known = new Set([viewerId, ...friends]);
     const mutuals = [...new Set((hops ?? []).map((h) => h.friend_id as string).filter((id) => !known.has(id)))];
-    const [{ data: a }, { data: b }] = await Promise.all([
+    // friends who count the viewer as close: their close-friends signals are for the viewer too
+    const { data: closeEdges } = await db.from("friendships").select("user_id").eq("friend_id", viewerId).eq("close", true);
+    const closeOf = (closeEdges ?? []).map((e) => e.user_id as string);
+    const [{ data: a }, { data: b }, { data: c }] = await Promise.all([
       db.from("muses").select("*").in("user_id", friends).in("audience", ["friends", "mutual"]).order("created_at", { ascending: false }).limit(FRIEND_SIGNALS),
+      closeOf.length > 0
+        ? db.from("muses").select("*").in("user_id", closeOf).eq("audience", "close").order("created_at", { ascending: false }).limit(FRIEND_SIGNALS)
+        : Promise.resolve({ data: [] as Muse[] }),
       mutuals.length > 0
         ? db.from("muses").select("*").in("user_id", mutuals).eq("audience", "mutual").order("created_at", { ascending: false }).limit(FRIEND_SIGNALS)
         : Promise.resolve({ data: [] as Muse[] }),
     ]);
-    theirs = [...((a ?? []) as Muse[]), ...((b ?? []) as Muse[])].filter((m) => !isExpired(m.expires_at, now));
+    theirs = [...((a ?? []) as Muse[]), ...((c ?? []) as Muse[]), ...((b ?? []) as Muse[])].filter((m) => !isExpired(m.expires_at, now));
   }
   const all = [...own, ...theirs];
   if (all.length === 0) return { signals: [], friendSignals: [] };
@@ -369,9 +408,12 @@ export async function createDraftFromMatch(museId: string, starterId: string, m:
 // to the first few friends as typed.
 export async function createPoll(starterId: string, text: string, opts: SignalOpts & { audience: Audience } = { waitFor: QUORUM, expiresAt: null, audience: "muse" }): Promise<string> {
   const db = serverDb();
-  const { data: edges, error: e0 } = await db.from("friendships").select("friend_id").eq("user_id", starterId).order("friend_id").limit(POLL_INVITES);
+  const { data: allEdges, error: e0 } = await db.from("friendships").select("friend_id,close").eq("user_id", starterId).order("friend_id");
   if (e0) throw new Error(`friends: ${e0.message}`);
-  const friendIds = (edges ?? []).map((e) => e.friend_id as string);
+  // a close-friends signal asks close friends only (everyone, if nobody is marked close)
+  const closeOnly = opts.audience === "close" ? (allEdges ?? []).filter((e) => e.close) : [];
+  const edges = (closeOnly.length > 0 ? closeOnly : (allEdges ?? [])).slice(0, POLL_INVITES);
+  const friendIds = edges.map((e) => e.friend_id as string);
   if (friendIds.length === 0) throw new PlanError("no friends to ask yet");
   const { data: muse, error: e1 } = await db.from("muses").insert({ user_id: starterId, raw_text: text, audience: opts.audience, wait_for: opts.waitFor, expires_at: opts.expiresAt }).select("id").single();
   if (e1 || !muse) throw new Error(`muse insert: ${e1?.message}`);
