@@ -1,3 +1,4 @@
+import AVFoundation
 import SwiftUI
 
 @main
@@ -381,47 +382,105 @@ struct AccountPrompt: View {
     }
 }
 
-// the brief musing. introduction on a fresh launch. it waits on nothing: no api,
-// no data, no images. it leaves on its own in about a second, or at once on a tap.
+// what someone sees when the app opens: the musing. intro clip, once, without sound. it
+// waits on nothing (no api, no data) and leaves when the clip ends, or at once on a tap.
+// the clip is supplied artwork kept beside the muse pictures, so it is not in git: a build
+// without it, and anyone who has asked for reduced motion, gets the still wordmark instead.
 struct LaunchIntro: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var visible = true
     @State private var risen = false
     @State private var drawn = false
+    /// the clip's own backdrop colour, so the square picture has no visible edge on a tall screen
+    private static let backdrop = Color(hex: 0xf2f4fa)
+    private static let clip: URL? = {
+        guard let base = Bundle.main.resourcePath else { return nil }
+        let url = URL(fileURLWithPath: "\(base)/mock/muse/intro.mp4")
+        return FileManager.default.fileExists(atPath: url.path) ? url : nil
+    }()
 
     var body: some View {
         if visible {
             ZStack {
-                Color.white.ignoresSafeArea()
-                VStack(spacing: 0) {
-                    (Text("musing").foregroundStyle(FB.text) + Text(".").foregroundStyle(Muse.start))
-                        .font(.system(size: 46, weight: .heavy)).tracking(-1.8)
-                    Capsule().fill(Muse.entryGradient).frame(width: 132, height: 4).padding(.top, 6)
-                        .scaleEffect(x: drawn ? 1 : 0, anchor: .center)
-                    Text("less planning. more happening.").font(.system(size: 16)).foregroundStyle(FB.muted).padding(.top, 14)
+                if let clip = Self.clip, !reduceMotion {
+                    Self.backdrop.ignoresSafeArea()
+                    // the clip is square: shown whole, as wide as the screen, in the middle
+                    IntroClip(url: clip) { leave(0.3) }
+                        .aspectRatio(1, contentMode: .fit)
+                        // its last few points fade into the backdrop above and below
+                        .mask(LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.04), .init(color: .black, location: 0.96), .init(color: .clear, location: 1)], startPoint: .top, endPoint: .bottom))
+                        .frame(maxWidth: 520)
+                        .opacity(risen ? 1 : 0)
+                        .task {
+                            withAnimation(.easeOut(duration: 0.2)) { risen = true }
+                            // never stuck here: if the clip can't play, move on anyway
+                            try? await Task.sleep(for: .seconds(7))
+                            leave(0.26)
+                        }
+                } else {
+                    Color.white.ignoresSafeArea()
+                    VStack(spacing: 0) {
+                        (Text("musing").foregroundStyle(FB.text) + Text(".").foregroundStyle(Muse.start))
+                            .font(.system(size: 46, weight: .heavy)).tracking(-1.8)
+                        Capsule().fill(Muse.entryGradient).frame(width: 132, height: 4).padding(.top, 6)
+                            .scaleEffect(x: drawn ? 1 : 0, anchor: .center)
+                        Text("less planning. more happening.").font(.system(size: 16)).foregroundStyle(FB.muted).padding(.top, 14)
+                    }
+                    .opacity(risen ? 1 : 0)
+                    .offset(y: risen ? 0 : 10)
+                    .task {
+                        if reduceMotion {
+                            risen = true
+                            drawn = true
+                        } else {
+                            withAnimation(.easeOut(duration: 0.38)) { risen = true }
+                            withAnimation(.easeOut(duration: 0.52).delay(0.16)) { drawn = true }
+                        }
+                        try? await Task.sleep(for: .milliseconds(950))
+                        leave(0.26)
+                    }
                 }
-                .opacity(risen ? 1 : 0)
-                .offset(y: risen ? 0 : 10)
             }
             .contentShape(Rectangle())
             .onTapGesture { leave(0.12) }
             .accessibilityLabel("musing. less planning. more happening. tap to skip")
             .transition(.opacity)
-            .task {
-                if reduceMotion {
-                    risen = true
-                    drawn = true
-                } else {
-                    withAnimation(.easeOut(duration: 0.38)) { risen = true }
-                    withAnimation(.easeOut(duration: 0.52).delay(0.16)) { drawn = true }
-                }
-                try? await Task.sleep(for: .milliseconds(950))
-                leave(0.26)
-            }
         }
     }
 
     private func leave(_ duration: Double) {
         withAnimation(.easeOut(duration: duration)) { visible = false }
     }
+}
+
+/// plays one clip once, silently, and says when it ends. the clip has no sound track, so
+/// it never touches whatever the phone is already playing.
+private struct IntroClip: UIViewRepresentable {
+    let url: URL
+    let ended: () -> Void
+
+    final class Surface: UIView {
+        override class var layerClass: AnyClass { AVPlayerLayer.self }
+        var playerLayer: AVPlayerLayer { layer as! AVPlayerLayer }
+        let player = AVPlayer()
+        var watch: NSObjectProtocol?
+        deinit { if let watch { NotificationCenter.default.removeObserver(watch) } }
+    }
+
+    func makeUIView(context: Context) -> Surface {
+        let v = Surface()
+        let item = AVPlayerItem(url: url)
+        v.player.isMuted = true
+        v.player.allowsExternalPlayback = false
+        v.player.preventsDisplaySleepDuringVideoPlayback = false
+        v.player.replaceCurrentItem(with: item)
+        v.playerLayer.player = v.player
+        v.playerLayer.videoGravity = .resizeAspect
+        v.backgroundColor = .clear
+        v.watch = NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main) { _ in ended() }
+        v.player.play()
+        return v
+    }
+
+    func updateUIView(_ uiView: Surface, context: Context) {}
 }
