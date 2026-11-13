@@ -318,6 +318,7 @@ struct SuggestCard: View {
 // summaries are written server side and never contain a private limit.
 struct TracePanel: View {
     @EnvironmentObject var app: AppState
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let planId: String?
     @State private var rows: [MuseTrace] = []
     private let colors: [String: UInt32] = ["understand": 0x0ea5e9, "match": 0x7c3aed, "coordinate": 0xec4899, "create": 0x16a34a, "suggest": 0xf59e0b]
@@ -325,23 +326,39 @@ struct TracePanel: View {
     var body: some View {
         Group {
             if app.traceOn {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("muse trace").font(.system(size: 12, weight: .bold)).foregroundStyle(Color(hex: 0xc4b5fd))
+                VStack(alignment: .leading, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("muse receipt").font(.system(size: 12, weight: .bold)).foregroundStyle(Color(hex: 0xc4b5fd))
+                        Text("real steps from this plan · private details stay private").font(.system(size: 11)).foregroundStyle(Color(hex: 0x9ca3af))
+                    }
                     if rows.isEmpty { Text("no muse calls yet.").font(.system(size: 13)).foregroundStyle(Color(hex: 0x9ca3af)) }
-                    ForEach(rows) { r in
-                        HStack(alignment: .top, spacing: 8) {
-                            Text(r.job).font(.system(size: 11, weight: .bold)).foregroundStyle(.white).frame(width: 78).padding(.vertical, 2)
-                                .background(colors[r.job].map { Color(hex: $0) } ?? FB.muted, in: RoundedRectangle(cornerRadius: 6))
-                            VStack(alignment: .leading, spacing: 0) {
+                    ForEach(Array(rows.enumerated()), id: \.element.id) { index, r in
+                        HStack(alignment: .top, spacing: 10) {
+                            VStack(spacing: 0) {
+                                Image(systemName: r.ok ? "checkmark" : "exclamationmark")
+                                    .font(.system(size: 8, weight: .bold))
+                                    .foregroundStyle(.white)
+                                    .frame(width: 18, height: 18)
+                                    .background(colors[r.job].map { Color(hex: $0) } ?? FB.muted, in: Circle())
+                                if index < rows.count - 1 {
+                                    Rectangle().fill(Color(hex: 0x3f3a4d)).frame(width: 1).frame(maxHeight: .infinity)
+                                }
+                            }
+                            .frame(width: 18)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(r.job).font(.system(size: 11, weight: .bold)).foregroundStyle(colors[r.job].map { Color(hex: $0) } ?? Color(hex: 0xc4b5fd))
                                 Text(r.summary).font(.system(size: 13)).foregroundStyle(r.ok ? Color(hex: 0xf3f4f6) : Color(hex: 0xfca5a5)).lineLimit(2)
                                 Text((r.model == "cache" ? "replayed from cache" : "\(r.model) · \(String(format: "%.1f", Double(r.latencyMs) / 1000))s") + (r.ok ? "" : " · failed")).font(.system(size: 11)).foregroundStyle(Color(hex: 0x9ca3af))
                             }
                         }
+                        .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
+                        .accessibilityElement(children: .combine)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading).padding(12)
                 .background(Color(hex: 0x16131f), in: RoundedRectangle(cornerRadius: UI.cardRadius))
-                .accessibilityLabel("muse trace")
+                .accessibilityLabel("muse receipt")
+                .accessibilityIdentifier("muse-receipt")
             }
         }
         .task(id: "\(app.traceOn)-\(app.version)") { await load() }
@@ -351,7 +368,9 @@ struct TracePanel: View {
     private func load() async {
         guard app.traceOn else { return }
         guard let all: [MuseTrace] = try? await Supa.select("muse_trace", "select=*&order=id.desc&limit=\(planId == nil ? 8 : 40)") else { return }
-        rows = planId.map { id in Array(all.filter { $0.planId == id || $0.planId == nil }.prefix(8)) } ?? all
+        let next = planId.map { id in Array(all.filter { $0.planId == id || $0.planId == nil }.prefix(8)) } ?? all
+        let animation: Animation = reduceMotion ? .easeOut(duration: 0.14) : .spring(response: 0.42, dampingFraction: 0.86)
+        withAnimation(animation) { rows = next }
     }
 }
 
@@ -455,6 +474,7 @@ struct WhatIf: View {
 // count. a friend sees their own ask and the count. names appear only once it's on.
 struct PlanScreen: View {
     @EnvironmentObject var app: AppState
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let planId: String
     @State private var plan: PlanView?
     @State private var loading = true
@@ -470,6 +490,8 @@ struct PlanScreen: View {
     @State private var checkedSeen = false
     /// someone who already answered sees their answer and one button to change it
     @State private var changing = false
+    /// shown only when this open screen observes the server move a proposal to happening
+    @State private var justConfirmed = false
 
     var body: some View {
         SubScreen(title: title, trailing: trailing) {
@@ -521,6 +543,7 @@ struct PlanScreen: View {
             }
         }
         .animation(.easeOut(duration: 0.18), value: whatIfOpen)
+        .sensoryFeedback(.success, trigger: justConfirmed)
     }
 
     private var title: String {
@@ -540,7 +563,19 @@ struct PlanScreen: View {
         let user = app.userId
         let p: PlanView? = try? await API.get("/api/plans/\(planId)", user: user)
         guard user == app.userId, !Task.isCancelled else { return }
-        plan = p
+        let previous = plan
+        let becameConfirmed = previous?.state == "proposing" && p?.state == "happening"
+        let changedOnScreen = previous?.version != p?.version || previous?.state != p?.state || previous?.downCount != p?.downCount
+        if previous != nil, changedOnScreen {
+            let animation: Animation = reduceMotion ? .easeOut(duration: 0.16) : .spring(response: 0.5, dampingFraction: 0.84)
+            withAnimation(animation) {
+                plan = p
+                if becameConfirmed { justConfirmed = true }
+                if p?.state != "happening" { justConfirmed = false }
+            }
+        } else {
+            plan = p
+        }
         loading = false
         guard let p else { return }
         if !checkedSeen {
@@ -592,7 +627,14 @@ struct PlanScreen: View {
         let myStatus = p.me?.status
         let who = firstName(p.starter.name)
 
+        if justConfirmed, p.state == "happening" {
+            confirmationMoment
+                .transition(reduceMotion ? .opacity : .scale(scale: 0.96, anchor: .top).combined(with: .move(edge: .top)).combined(with: .opacity))
+        }
+
         PlanSummaryCard(plan: p, detail: true, lookOverride: wasUnread ? .updated : nil, eventAction: true)
+            .id("plan-summary-\(p.version)-\(p.state)")
+            .transition(reduceMotion ? .opacity : .scale(scale: 0.985, anchor: .top).combined(with: .opacity))
 
         let moved = changes(p)
         if !moved.isEmpty {
@@ -608,6 +650,7 @@ struct PlanScreen: View {
                     }
                 }
             }
+            .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
         }
 
         // muse's voice: the pitch for a draft, the personal ask for a friend, the note after a re-solve
@@ -632,10 +675,12 @@ struct PlanScreen: View {
                         HStack(spacing: 6) {
                             ForEach(0..<max(p.quorum, 0), id: \.self) { i in
                                 Circle().fill(i < p.downCount ? Muse.start : .clear).frame(width: 14, height: 14).overlay(Circle().stroke(Muse.start, lineWidth: 2))
+                                    .animation(reduceMotion ? .easeOut(duration: 0.12) : .spring(response: 0.34, dampingFraction: 0.72), value: p.downCount)
                             }
                         }
                         Text(need > 0 ? "\(p.downCount) of \(p.quorum) in. \(need) more and it's on." : "That's enough. Making it real.")
                             .font(.system(size: 15, weight: .semibold)).foregroundStyle(FB.text)
+                            .contentTransition(reduceMotion ? .opacity : .numericText())
                     }
                     fine(starter ? "You'll see who's in once it's on. You never see who passed or who said maybe, and neither does anyone else." : "Your answer stays between you and muse until it's on.")
                 }
@@ -749,6 +794,25 @@ struct PlanScreen: View {
     private func banner(_ t: String) -> some View {
         Text(t).font(.system(size: 16, weight: .bold)).foregroundStyle(Muse.text)
             .frame(maxWidth: .infinity).frame(height: UI.buttonBig).background(Muse.soft, in: RoundedRectangle(cornerRadius: UI.buttonRadius))
+    }
+
+    private var confirmationMoment: some View {
+        Card {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 32, height: 32)
+                    .background(Muse.start, in: Circle())
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("It's happening").font(UI.cardTitle).foregroundStyle(FB.text)
+                    Text("The wait-for number was reached. Approved names are visible now; private answers stay private.")
+                        .font(UI.meta).foregroundStyle(FB.muted).fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("plan-confirmed-moment")
     }
 
     private func fine(_ t: String) -> some View {
