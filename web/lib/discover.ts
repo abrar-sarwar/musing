@@ -43,6 +43,7 @@ const TOPICS: Record<string, string[]> = {
   volleyball: ["volleyball", "volley"],
   tennis: ["tennis"],
   pickleball: ["pickleball", "pickle ball"],
+  golf: ["golf*", "driving range", "tee time", "putt*", "nine holes"],
   climbing: ["climb*", "boulder*"],
   skate: ["skate*"],
   cycling: ["bike", "biking", "cycling", "bicycle"],

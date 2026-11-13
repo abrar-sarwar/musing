@@ -1,7 +1,23 @@
-import { parseAudience, parseWaitFor, expiresAt, isExpired, quorumFor, outcome, canSeeSignal } from "@/lib/signals";
+import { matchesFriend } from "@/lib/friends";
+import { parseAudience, parseWaitFor, expiresAt, isExpired, quorumFor, outcome, canSeeSignal, addableIds } from "@/lib/signals";
+
+const edges = [{ friend_id: "alex", close: true }, { friend_id: "dev", close: false }, { friend_id: "jo", close: true }];
 
 const now = new Date("2026-11-12T00:00:00.000Z");
 const cases: Array<[string, unknown, unknown]> = [
+  // who a starter may add to a draft: own friends only, close friends only for a close signal
+  ["addable friends", addableIds(edges, "friends").join(), "alex,dev,jo"],
+  ["addable close", addableIds(edges, "close").join(), "alex,jo"],
+  ["addable close, nobody marked", addableIds([{ friend_id: "dev", close: false }], "close").join(), "dev"],
+  // friend search: a known friend is found by any part of their name, any case, or an interest
+  ["search first name prefix", matchesFriend({ name: "Alex Kim" }, "al"), true],
+  ["search last name", matchesFriend({ name: "Alex Kim" }, "KIM"), true],
+  ["search both, any order", matchesFriend({ name: "Alex Kim" }, " kim  alex "), true],
+  ["search accents folded", matchesFriend({ name: "Zoë Park" }, "zoe"), true],
+  ["search interest", matchesFriend({ name: "Jo Lee", interests: ["vintage denim"] }, "denim"), true],
+  ["search empty lists everyone", matchesFriend({ name: "Jo Lee" }, ""), true],
+  ["search no match", matchesFriend({ name: "Jo Lee" }, "sam"), false],
+  ["addable mutual stays own friends", addableIds(edges, "mutual").join(), "alex,dev,jo"],
   ["parseWaitFor 3", parseWaitFor(3), 3],
   ["parseWaitFor '4'", parseWaitFor("4"), 2],
   ["parseWaitFor 0", parseWaitFor(0), 2],

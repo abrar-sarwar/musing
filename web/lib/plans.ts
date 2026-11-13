@@ -117,6 +117,7 @@ async function buildView(b: Bundle, viewerId: string): Promise<PlanView | null> 
           .filter((p): p is { user: User; reason: string | null } => Boolean(p.user))
           .map((p) => ({ user: person(p.user), reason: p.reason }))
       : null,
+    skipped: isStarter && plan.state === "draft" ? await skippedPicks(plan.id, users) : null,
     // names appear only once it's real, and only the people who are in.
     going: happening ? [starter, ...down.map((m) => users.get(m.user_id)).filter((u): u is User => Boolean(u))].map(person) : null,
     me: mine ? { personalAsk: mine.personal_ask, status: mine.status, counteroffer: mine.counteroffer, privateLimit } : null,
@@ -616,32 +617,57 @@ export async function makeItReal(planId: string): Promise<void> {
     ? { data: oldThread, error: null }
     : await db.from("threads").insert({ title: lower(made.thread_title), member_ids: going, plan_id: planId }).select("id").single();
   if (e1 || !thread) throw new Error(`thread insert: ${e1?.message}`);
-  const { data: oldEvent } = await db.from("events").select("id").eq("plan_id", planId).limit(1).maybeSingle();
-  const { data: event, error: e2 } = oldEvent
-    ? { data: oldEvent, error: null }
-    : await db
-        .from("events")
-        .insert({ plan_id: planId, host_id: plan.starter_id, title: made.event_title, description: made.event_description, starts_at: startsAt?.toISOString() ?? null, location: plan.where_text })
-        .select("id")
-        .single();
-  if (e2 || !event) throw new Error(`event insert: ${e2?.message}`);
+  const draft: EventDraft = { event_title: made.event_title, event_description: made.event_description, poster_prompt: made.poster_prompt };
+  const eventId = await insertEvent(plan, draft, startsAt);
   const { data: oldCard } = await db.from("messages").select("id").eq("thread_id", thread.id).not("card", "is", null).limit(1).maybeSingle();
   if (!oldCard) await db.from("messages").insert({
     thread_id: thread.id,
     sender_id: null,
     kind: "muse",
     body: lower(made.announce),
-    card: { type: "plan", plan_id: planId, event_id: event.id, title: plan.activity, when: plan.when_text, where: plan.where_text, line: lower(made.announce), found },
+    card: { type: "plan", plan_id: planId, event_id: eventId, title: plan.activity, when: plan.when_text, where: plan.where_text, line: lower(made.announce), found },
   });
-  await db.from("plans").update({ thread_id: thread.id, event_id: event.id, making_at: null, updated_at: new Date().toISOString() }).eq("id", planId);
+  await db.from("plans").update({ thread_id: thread.id, event_id: eventId, making_at: null, updated_at: new Date().toISOString() }).eq("id", planId);
   // a yes that landed while this ran is not in `going`: read the members again
   await syncThreadMembers(planId, thread.id as string, plan.starter_id);
+  await posterFor(planId, eventId, draft.poster_prompt, settings);
+}
 
-  if (settings.posters_on && made.poster_prompt) {
-    // awaited: a serverless host freezes the function once this returns, and the poster would never land.
-    // callers run this inside after(), so no response waits on it.
-    await makePoster(planId, event.id as string, made.poster_prompt, settings.muse_replay).catch((e) => console.error("poster failed:", e));
-  }
+type EventDraft = { event_title: string; event_description: string; poster_prompt: string };
+
+// the plan's mock event, seen by the people going. picks up one an earlier, failed attempt already made.
+async function insertEvent(plan: Plan, d: EventDraft, startsAt: Date | null): Promise<string> {
+  const db = serverDb();
+  const { data: old } = await db.from("events").select("id").eq("plan_id", plan.id).limit(1).maybeSingle();
+  if (old) return old.id as string;
+  const { data: event, error } = await db
+    .from("events")
+    .insert({ plan_id: plan.id, host_id: plan.starter_id, visibility: "private", title: d.event_title, description: d.event_description, starts_at: startsAt?.toISOString() ?? null, location: plan.where_text })
+    .select("id")
+    .single();
+  if (error || !event) throw new Error(`event insert: ${error?.message}`);
+  return event.id as string;
+}
+
+async function posterFor(planId: string, eventId: string, prompt: string, settings: Awaited<ReturnType<typeof getSettings>>): Promise<void> {
+  if (!settings.posters_on || !prompt) return;
+  // awaited: a serverless host freezes the function once this returns, and the poster would never land.
+  // callers run this inside after(), so no response waits on it.
+  await makePoster(planId, eventId, prompt, settings.muse_replay).catch((e) => console.error("poster failed:", e));
+}
+
+// muse's picks the starter took off a draft, with muse's reason, for the starter alone
+async function skippedPicks(planId: string, known: Map<string, User>): Promise<Array<{ user: Person; reason: string | null }>> {
+  const db = serverDb();
+  const { data: rows } = await db.from("plan_skips").select("user_id,reason").eq("plan_id", planId).order("created_at");
+  if (!rows || rows.length === 0) return [];
+  const missing = rows.map((r) => r.user_id as string).filter((id) => !known.has(id));
+  const { data: more } = missing.length > 0 ? await db.from("users").select("*").in("id", missing) : { data: [] };
+  const users = new Map([...known, ...((more ?? []) as User[]).map((u) => [u.id, u] as const)]);
+  return rows.flatMap((r) => {
+    const u = users.get(r.user_id as string);
+    return u ? [{ user: person(u), reason: (r.reason as string | null) ?? null }] : [];
+  });
 }
 
 // muse image takes ~45s. the event shows a gradient until this lands.

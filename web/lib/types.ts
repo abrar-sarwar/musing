@@ -163,6 +163,7 @@ export type PlanView = {
   invited: number;
   downCount: number;
   picks: Array<{ user: Person; reason: string | null }> | null; // starter only
+  skipped: Array<{ user: Person; reason: string | null }> | null; // muse's picks the starter left off. starter, draft only
   going: Person[] | null; // only once it's happening
   me: {
     personalAsk: string | null;

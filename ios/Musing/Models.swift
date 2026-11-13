@@ -92,7 +92,27 @@ struct PlanView: Decodable, Identifiable {
     /// ideas for the "what if..." box that fit this plan
     let whatIfs: [String]?
     let updatedAt: String?
+    /// muse's picks the starter left off a draft, with muse's reason. starter, draft only
+    let skipped: [Pick]?
 }
+
+/// a friend the starter could still add to a draft, within the signal's audience
+struct AddablePerson: Decodable, Identifiable {
+    let id: String
+    let name: String
+    let avatarSeed: String
+    let interests: [String]
+    var person: Person { Person(id: id, name: name, avatarSeed: avatarSeed) }
+}
+struct AddableList: Decodable { let people: [AddablePerson] }
+
+/// one public event in the ranked events feed. friendCount is only ever 3 or more, never who.
+struct EventPick: Decodable {
+    let eventId: String
+    let line: String?
+    let friendCount: Int?
+}
+struct EventFeed: Decodable { let events: [EventPick] }
 
 // one signal, shaped for one viewer. who is in is only ever a count.
 struct SignalView: Decodable, Identifiable {
@@ -127,6 +147,8 @@ struct PublicEvent: Decodable, Identifiable {
     let title: String
     let description: String
     let whenText: String
+    /// sun..sat, the weekly slot. optional so an older server still decodes.
+    let whenDay: String?
     let area: String
     let organizer: String
     let capacity: Int?
@@ -314,3 +336,4 @@ struct MuseTrace: Decodable, Identifiable {
 }
 
 struct PlanIdResponse: Decodable { let planId: String }
+struct EventCreated: Decodable { let eventId: String }

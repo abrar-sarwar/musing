@@ -204,6 +204,10 @@ struct PlanSummaryCard: View {
     var detail = false
     /// set by the plan's own page, which has already marked it seen but still wants it shown as news
     var lookOverride: PlanLook?
+    /// the plans tab and the plan's own page offer the starter "create event"; the calendar does not
+    var eventAction = false
+    @State private var confirming = false
+    @State private var making = false
 
     var body: some View {
         // each status has its own look: red outline for news, dashed for a draft, soft blue once it's on
@@ -225,11 +229,33 @@ struct PlanSummaryCard: View {
                 if plan.state == "draft" || plan.state == "proposing", let left = expiresIn(plan.expiresAt) { MetaRow(icon: "hourglass", text: sentenceCase(left)) }
             }
             PeopleChips(plan: plan).padding(.top, 2)
+            if eventAction, plan.role == "starter" {
+                EventPill(icon: "calendar.badge.plus", label: "Create event", busy: making) { confirming = true }
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(UI.cardPad)
         .background(look.fill, in: RoundedRectangle(cornerRadius: UI.cardRadius))
         .overlay(look.border())
+        // the same explicit, confirmed step as on a signal card
+        .confirmationDialog("Make this a public event?", isPresented: $confirming, titleVisibility: .visible) {
+            Button("Create event") { makeEvent() }
+        } message: {
+            Text("Anyone in the app will see it. It's an in-app mock event. Nothing is posted to Facebook.")
+        }
+    }
+
+    private func makeEvent() {
+        making = true
+        Task {
+            do {
+                let r: EventCreated = try await API.post("/api/events", user: app.userId, body: ["planId": plan.id])
+                app.push(.event(r.eventId))
+            } catch let e {
+                toast(errorText(e))
+            }
+            making = false
+        }
     }
 }
 
@@ -251,6 +277,9 @@ struct SignalCard: View {
     private var isFresh: Bool { parseDate(signal.createdAt).map { Date().timeIntervalSince($0) < 300 } ?? false }
 
     private var inLine: String { signal.inCount == 0 ? "" : " · \(signal.inCount) in so far" }
+
+    @State private var confirming = false
+    @State private var making = false
 
     var body: some View {
         Card {
@@ -274,7 +303,29 @@ struct SignalCard: View {
                 Text(signal.text).font(.system(size: 17, weight: .semibold)).foregroundStyle(FB.text).fixedSize(horizontal: false, vertical: true)
                 Text(meta).font(UI.meta).foregroundStyle(FB.muted)
                 strip
+                if signal.mine {
+                    EventPill(icon: "calendar.badge.plus", label: "Create event", busy: making) { confirming = true }
+                }
             }
+        }
+        // turning a signal public is the author's explicit choice, so it asks first
+        .confirmationDialog("Make this a public event?", isPresented: $confirming, titleVisibility: .visible) {
+            Button("Create event") { makeEvent() }
+        } message: {
+            Text("Anyone in the app will see it. It's an in-app mock event. Nothing is posted to Facebook.")
+        }
+    }
+
+    private func makeEvent() {
+        making = true
+        Task {
+            do {
+                let r: EventCreated = try await API.post("/api/events", user: app.userId, body: ["signalId": signal.id])
+                app.push(.event(r.eventId))
+            } catch let e {
+                toast(errorText(e))
+            }
+            making = false
         }
     }
 
@@ -417,7 +468,7 @@ struct MusingScreen: View {
     }
 
     private func planButton(_ p: PlanView) -> some View {
-        Button { app.push(.plan(p.id)) } label: { PlanSummaryCard(plan: p) }.buttonStyle(FadePress())
+        Button { app.push(.plan(p.id)) } label: { PlanSummaryCard(plan: p, eventAction: true) }.buttonStyle(FadePress())
     }
 
     /// asks waiting on me first, then everything else newest first (the server's order)

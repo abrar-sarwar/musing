@@ -11,8 +11,11 @@ struct DraftEditor: View {
     /// muse redid the plan: the old draft is gone and this is the new one
     let onReplaced: (String) -> Void
 
-    @State private var friendIds: [String] = []
-    @State private var adding = false
+    /// the friends this signal reaches who aren't on the draft yet, from the server
+    @State private var people: [AddablePerson]?
+    @State private var search = ""
+    @State private var loadError: String?
+    @State private var adding = true
     @State private var busy: String?
     @State private var error: String?
     @State private var ask = ""
@@ -21,9 +24,11 @@ struct DraftEditor: View {
     @FocusState private var focused: Bool
 
     private var picks: [PlanView.Pick] { plan.picks ?? [] }
-    private var addable: [User] {
-        let asked = Set(picks.map(\.user.id))
-        return friendIds.filter { !asked.contains($0) }.compactMap { app.user($0) }.sorted { $0.name < $1.name }
+    private var skipped: [PlanView.Pick] { plan.skipped ?? [] }
+    /// the server searches (any part of a name, or an interest). muse's own picks that were left off are listed above.
+    private var addable: [AddablePerson] {
+        let off = Set(skipped.map(\.user.id))
+        return (people ?? []).filter { !off.contains($0.id) }
     }
     private var trimmed: String { ask.trimmingCharacters(in: .whitespacesAndNewlines) }
 
@@ -51,17 +56,63 @@ struct DraftEditor: View {
                 }
                 .opacity(busy == pick.user.id ? 0.5 : 1)
             }
+            // muse's picks the starter left off: one tap asks them after all, with muse's own ask
+            ForEach(skipped, id: \.user.id) { pick in
+                Card {
+                    HStack(spacing: 12) {
+                        Avatar(pick.user, size: 44).opacity(0.5)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(pick.user.name).font(.system(size: 16, weight: .semibold)).foregroundStyle(FB.muted)
+                            Text("Not asking").font(.system(size: 14)).foregroundStyle(FB.muted)
+                        }
+                        Spacer(minLength: 0)
+                        Button { change(["add": pick.user.id], name: pick.user.id) } label: {
+                            Text("Ask").font(.system(size: 14, weight: .bold)).foregroundStyle(FB.blue)
+                                .padding(.horizontal, 12).frame(height: 30).background(FB.blueSoft, in: Capsule())
+                        }
+                        .buttonStyle(FadePress()).disabled(busy != nil || redoing)
+                        .accessibilityLabel("Ask \(firstName(pick.user.name)) after all")
+                    }
+                }
+                .opacity(busy == pick.user.id ? 0.5 : 1)
+            }
 
             if adding {
                 Card {
                     VStack(alignment: .leading, spacing: 0) {
-                        if addable.isEmpty {
-                            Text(friendIds.isEmpty ? "Loading your friends" : "Everyone on your friends list is already here.").font(.system(size: 14)).foregroundStyle(FB.muted)
+                        // a scrollable row of friends to tap, then the search for anyone further down the list
+                        if !addable.isEmpty {
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 14) {
+                                    ForEach(addable) { friend in
+                                        Button { change(["add": friend.id], name: friend.id) } label: {
+                                            VStack(spacing: 4) {
+                                                Avatar(friend.person, size: 52).overlay(alignment: .bottomTrailing) {
+                                                    Image(systemName: "plus.circle.fill").font(.system(size: 18)).foregroundStyle(Muse.start).background(Circle().fill(Color.white))
+                                                }
+                                                Text(firstName(friend.name)).font(.system(size: 12, weight: .semibold)).foregroundStyle(FB.text).lineLimit(1)
+                                            }
+                                            .frame(width: 64)
+                                        }
+                                        .buttonStyle(FadePress()).disabled(busy != nil || redoing)
+                                        .accessibilityLabel("Add \(friend.name)")
+                                    }
+                                }
+                            }
+                            .padding(.bottom, 10)
                         }
-                        ForEach(addable) { friend in
+                        TextField("Search your friends", text: $search)
+                            .font(.system(size: 15)).textInputAutocapitalization(.never).autocorrectionDisabled()
+                            .padding(.horizontal, 12).frame(height: 38).background(FB.input, in: RoundedRectangle(cornerRadius: 8))
+                            .padding(.bottom, 6)
+                            .accessibilityIdentifier("draft-friend-search")
+                        if addable.isEmpty {
+                            Text(loadError ?? (people == nil ? "Loading your friends" : search.isEmpty ? "Everyone this signal reaches is already here." : "No friend matches that.")).font(.system(size: 14)).foregroundStyle(loadError == nil ? FB.muted : FB.red)
+                        }
+                        ForEach(search.isEmpty ? [] : addable) { friend in
                             Button { change(["add": friend.id], name: friend.id) } label: {
                                 HStack(spacing: 10) {
-                                    Avatar(friend, size: 34)
+                                    Avatar(friend.person, size: 34)
                                     VStack(alignment: .leading, spacing: 1) {
                                         Text(friend.name).font(.system(size: 15, weight: .semibold)).foregroundStyle(FB.text)
                                         if !friend.interests.isEmpty { Text(friend.interests.prefix(3).joined(separator: ", ")).font(.system(size: 13)).foregroundStyle(FB.muted).lineLimit(1) }
@@ -78,7 +129,7 @@ struct DraftEditor: View {
                 }
             }
             QuietButton(label: adding ? "Done adding" : "Add a friend", fill: true) { withAnimation(.easeOut(duration: 0.15)) { adding.toggle() } }
-            Text("Muse suggested these people. Take anyone off or add your own. Each one gets a private ask, and none of them sees who else was asked.")
+            Text("Muse suggested these people. Take anyone off, ask them again, or add your own friends from the people this signal reaches. Each one gets a private ask, and none of them sees who else was asked.")
                 .font(UI.meta).foregroundStyle(FB.muted).fixedSize(horizontal: false, vertical: true)
 
             if plan.museOn {
@@ -98,9 +149,21 @@ struct DraftEditor: View {
             }
             if let error { Text(sentenceCase(error)).font(.system(size: 14)).foregroundStyle(FB.red) }
         }
-        .task(id: app.userId) {
-            let edges: [FriendEdge]? = try? await Supa.select("friendships", "select=friend_id&user_id=eq.\(app.userId)")
-            friendIds = (edges ?? []).map(\.friendId)
+        // refetched as the search changes and whenever who is asked changes, so the list never offers
+        // someone already on it. a failure is shown, never mistaken for "no friends match".
+        .task(id: "\(app.userId):\(search):\(picks.map(\.user.id).joined(separator: ","))") {
+            if !search.isEmpty { try? await Task.sleep(for: .milliseconds(250)) }
+            guard !Task.isCancelled else { return }
+            let q = search.trimmingCharacters(in: .whitespaces).addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+            do {
+                let list: AddableList = try await API.get("/api/plans/\(plan.id)/picks?q=\(q)", user: app.userId)
+                guard !Task.isCancelled else { return }
+                people = list.people
+                loadError = nil
+            } catch let e {
+                guard !Task.isCancelled else { return }
+                loadError = "Couldn't load your friends (\(errorText(e)))."
+            }
         }
     }
 

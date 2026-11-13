@@ -35,6 +35,8 @@ struct SignalComposer: View {
     /// how many friends have to be in before it's on
     @State private var waitFor = 2
     @State private var expires = "1w"
+    /// "signal": the usual thought to plan. "event": a public in-app event anyone can see, instead
+    @State private var mode = "signal"
     @State private var context: SignalContext?
     @State private var foundLine: String?
     @FocusState private var focused: Bool
@@ -44,6 +46,7 @@ struct SignalComposer: View {
     private var canSend: Bool { trimmed.count >= 2 && !busy }
 
     private var note: String {
+        if mode == "event" { return "This becomes a public event anyone in the app can see, instead of a signal. It's an in-app mock event. Nothing is posted to Facebook." }
         if !app.settings.museOn { return "Muse is off, so this goes out as typed, to the first few friends on your list." }
         if audience == "muse" { return "Only you and muse see this. Muse drafts a plan, and nothing goes to anyone until you say so." }
         return "\(audience == "mutual" ? "Friends and their friends" : audience == "close" ? "Your close friends" : "Friends") can see this signal and join. Muse drafts the plan, and nobody is asked until you send it."
@@ -73,11 +76,14 @@ struct SignalComposer: View {
                 .overlay(RoundedRectangle(cornerRadius: UI.cardRadius).stroke(focused ? FB.blue.opacity(0.5) : FB.button, lineWidth: 1))
                 .accessibilityIdentifier("signal-text")
 
-            OptionRow(label: "Send to", options: [("close", "Close friends"), ("friends", "Friends only"), ("mutual", "Friends of friends")], selection: $audience, disabled: busy)
-            OptionRow(label: "Wait for at least", options: (1...5).map { ($0, peopleCount($0)) }, selection: $waitFor, disabled: busy)
-            OptionRow(label: "Expires after", options: [("1d", "1 day"), ("3d", "3 days"), ("1w", "1 week"), ("2w", "2 weeks")], selection: $expires, disabled: busy)
+            OptionRow(label: "Create", options: [("signal", "Create signal"), ("event", "Create event")], selection: $mode, disabled: busy)
+            if mode == "signal" {
+                OptionRow(label: "Send to", options: [("close", "Close friends"), ("friends", "Friends only"), ("mutual", "Friends of friends")], selection: $audience, disabled: busy)
+                OptionRow(label: "Wait for at least", options: (1...5).map { ($0, peopleCount($0)) }, selection: $waitFor, disabled: busy)
+                OptionRow(label: "Expires after", options: [("1d", "1 day"), ("3d", "3 days"), ("1w", "1 week"), ("2w", "2 weeks")], selection: $expires, disabled: busy)
+            }
 
-            GradientButton(label: phase == .reading ? "Muse is reading" : phase == .mixing ? (museOn ? "Finding your people" : "Sending") : "Send a signal", big: true, busy: busy, disabled: !canSend) { send() }
+            GradientButton(label: phase == .reading ? "Muse is reading" : phase == .mixing ? (mode == "event" ? "Creating the event" : museOn ? "Finding your people" : "Sending") : mode == "event" ? "Create event" : "Send a signal", big: true, busy: busy, disabled: !canSend) { send() }
             Text(note).font(.system(size: 13).italic()).foregroundStyle(FB.muted).fixedSize(horizontal: false, vertical: true)
 
             if museOn, phase != .idle, phase != .error {
@@ -207,6 +213,14 @@ struct SignalComposer: View {
         if let context { body["context"] = ["kind": context.kind, "id": context.id] }
         work = Task {
             do {
+                if mode == "event" {
+                    // a public event instead of a signal: no muse, no plan, nobody asked
+                    phase = .mixing
+                    let r: EventCreated = try await API.post("/api/events", user: user, body: ["text": thought])
+                    reset()
+                    app.push(.event(r.eventId))
+                    return
+                }
                 if !app.settings.museOn {
                     // muse off: what's left is a plain poll to the first few friends
                     phase = .mixing
@@ -579,7 +593,7 @@ struct PlanScreen: View {
         let myStatus = p.me?.status
         let who = firstName(p.starter.name)
 
-        PlanSummaryCard(plan: p, detail: true, lookOverride: wasUnread ? .updated : nil)
+        PlanSummaryCard(plan: p, detail: true, lookOverride: wasUnread ? .updated : nil, eventAction: true)
 
         let moved = changes(p)
         if !moved.isEmpty {

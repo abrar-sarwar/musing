@@ -154,6 +154,14 @@ verified current behavior on the server; the choice is made on the draft, at the
 
 verified current behavior: an open plan includes two or three deterministic suggestions for its "what if..." box. `web/lib/whatif.ts` builds them from the plan, the viewer's own free time and real area labels from the seeded catalog; it makes no muse call. a plan tied to a public event instead suggests changes that preserve the event's fixed day, time and place, such as meeting beforehand or getting food afterward. tapping a suggestion fills the box but sends nothing until the person taps **ask muse**. `cd web && pnpm test:whatif` covers the rules.
 
+### public events, friend search and the events feed
+
+implemented, server tests run; ios not compiled in this change. needs migration `0010_plan_events_and_picks.sql`.
+
+- **create event or create signal**: the composer's first choice. "create signal" is the usual thought to plan. "create event" turns the words into a public in-app event that anyone in the app can see (`POST /api/events`), with no signal, plan or muse call. a signal's author can do the same later from the signal card ("create event", after a confirmation). the event a plan makes at quorum is still always made, and stays private to the people going (`events.visibility`). all of these are mock events; nothing is published to facebook.
+- **who gets asked**: on a draft, the starter sees a scrollable row of friends to tap and a search box. the server searches (`GET /api/plans/[id]/picks?q=`) by any part of a name, any case, accents folded, or an interest, limited to the people the signal's audience reaches (close friends only for a close-friends signal). each of muse's picks can be turned off and back on; turning one back on restores muse's own reason and ask.
+- **events tab**: facebook-style tabs (for you, local, this week, your events), category chips and large cover cards with the date in red, place, price and organizer, and interested, share and "make it a plan" buttons. signals and plans use the same card. "for you" follows `GET /api/events/recommended`, ranked by the same rule as the reels card (`web/lib/recommend.ts`): distinct opted-in friends into the event's topics, then their summed score, with any topic under three friends ignored, then the person's interests, then whether they're free. each pick has a line written by rule for that event ("let's host a game night. board game cafe night is saturday at 4, and you're free then"), with counts only and never names. `cd web && pnpm test:recommend` and `pnpm test:signals` cover the ranking, lines and friend search.
+
 ## product boundaries
 
 - existing friends are the default starting circle. mutuals, groups, communities or strangers are not silently added.

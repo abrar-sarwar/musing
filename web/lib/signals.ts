@@ -50,3 +50,13 @@ export function canSeeSignal(audience: Audience, relation: "self" | "close" | "f
   if (relation === "mutual") return audience === "mutual";
   return false;
 }
+
+/**
+ * who the starter may add, by the signal's audience: a close-friends signal reaches close
+ * friends only (everyone, if nobody is marked close, as when muse picks). every other audience
+ * is the starter's own friends. never a friend of a friend, never anyone else.
+ */
+export function addableIds(edges: Array<{ friend_id: string; close?: boolean | null }>, audience: Audience): string[] {
+  const close = audience === "close" ? edges.filter((e) => e.close) : [];
+  return (close.length > 0 ? close : edges).map((e) => e.friend_id);
+}

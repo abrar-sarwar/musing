@@ -93,10 +93,25 @@ enum API {
         return req
     }
 
+    /// what a person reads when the server they point at predates a route this build uses
+    static let missingFeature = "This server doesn't have this feature yet. Point the app at a server running this version (Developer settings)."
+
     private static func failure(_ data: Data, _ status: Int) -> ApiError {
+        if status == 404 || status == 405 { return ApiError(message: missingFeature) }
         if let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any], let msg = obj["error"] as? String { return ApiError(message: msg) }
         let text = String(data: data, encoding: .utf8) ?? ""
         return ApiError(message: text.isEmpty || text.count > 200 ? "http \(status)" : text)
+    }
+
+    /// a 2xx body that is not the expected json (an html page, an older server's shape) reads as a
+    /// plain sentence instead of the system's "data couldn't be read" message
+    private static func decode<T: Decodable>(_ data: Data) throws -> T {
+        do {
+            return try decoder.decode(T.self, from: data)
+        } catch is DecodingError {
+            if let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any], let msg = obj["error"] as? String { throw ApiError(message: msg) }
+            throw ApiError(message: missingFeature)
+        }
     }
 
     // several screens sign in at the same moment on launch, from different threads. the
@@ -135,11 +150,11 @@ enum API {
     }
 
     static func get<T: Decodable>(_ path: String, user: String) async throws -> T {
-        try decoder.decode(T.self, from: try await data("GET", path, user: user))
+        try decode(try await data("GET", path, user: user))
     }
 
     static func post<T: Decodable>(_ path: String, user: String, body: [String: Any]? = nil) async throws -> T {
-        try decoder.decode(T.self, from: try await data("POST", path, user: user, body: body))
+        try decode(try await data("POST", path, user: user, body: body))
     }
 
     // server paths like "/api/posters/<id>" need the api host in front
